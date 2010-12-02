@@ -1,26 +1,24 @@
 #include <string.h>
 #include "vid.h"
 
-#define WIDTH	80
-#define HEIGHT	25
 static uint16_t *vmem = (uint16_t*)0xb8000;
 
-void clear_scr(void)
+void clear_scr(int color)
 {
 	memset(vmem, 0, WIDTH * HEIGHT * 2);
 }
 
-void set_cursor(int x, int y)
-{
-	if(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
-		/* disable cursor */
-		return;
-	}
-	/* set cursor position */
-}
-
-void put_char(char c, int x, int y, int fg, int bg)
+void set_char(char c, int x, int y, int fg, int bg)
 {
 	uint16_t attr = (fg & 0xf) | ((bg & 7) << 4);
-	vmem[y * 80 + x] = (uint16_t)c | (attr << 8);
+	vmem[y * WIDTH + x] = (uint16_t)c | (attr << 8);
+}
+
+void scroll_scr(void)
+{
+	/* copy the second up to last text line, one line back, then
+	 * clear the last line.
+	 */
+	memmove(vmem, vmem + WIDTH, WIDTH * (HEIGHT - 1) * 2);
+	memset(vmem + WIDTH * (HEIGHT -1), 0, WIDTH * 2);
 }

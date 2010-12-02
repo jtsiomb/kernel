@@ -3,19 +3,15 @@
 #define STACK_SIZE	0x4000
 
 	.text
-	.globl _start
-_start:
-	/* jump over the multiboot header onto the startup code */
-	jmp kentry
-
 	.align 4
+	
 	/* multiboot header */
-mboot_hdr:
 	.long MAGIC
 	.long FLAGS
 	.long -(MAGIC + FLAGS)	/* checksum */
 	.fill 5, 4	/* fill out the rest with zeroes */
 
+	.globl kentry
 kentry:
 	/* setup a temporary kernel stack */
 	movl $(stack + STACK_SIZE), %esp

@@ -15,10 +15,10 @@ ASFLAGS = -m32 -g -nostdinc -fno-builtin -Isrc -Isrc/klibc
 bin = kernel.elf
 
 # default target: make an ELF binary by linking the object files
-# we need to specify where to assume the text segment (code) is going
-# in memory, as well as the kernel entry point (kstart).
+# we need to specify where to assume the text section (code) is going
+# in memory, as well as the kernel entry point (kentry).
 $(bin): $(obj)
-	ld -melf_i386 -o $@ -Ttext 0x200000 -e _start $(obj)
+	ld -melf_i386 -o $@ -Ttext 0x200000 -e kentry $(obj)
 
 .PHONY: clean
 clean:
