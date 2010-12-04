@@ -18,7 +18,7 @@ bin = kernel.elf
 # we need to specify where to assume the text section (code) is going
 # in memory, as well as the kernel entry point (kentry).
 $(bin): $(obj)
-	ld -melf_i386 -o $@ -Ttext 0x200000 -e kentry $(obj)
+	ld -melf_i386 -o $@ -Ttext 0x100000 -e kentry $(obj)
 
 .PHONY: clean
 clean:
