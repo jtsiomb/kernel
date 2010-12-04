@@ -3,7 +3,7 @@ csrc = $(wildcard src/*.c) $(wildcard src/klibc/*.c)
 asmsrc = $(wildcard src/*.S) $(wildcard src/klibc/*.S)
 
 # each source file will generate one object file
-obj = $(csrc:.c=.o) $(asmsrc:.S=.o)
+obj = $(asmsrc:.S=.o) $(csrc:.c=.o)
 
 CC = gcc
 

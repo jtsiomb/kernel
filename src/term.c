@@ -1,23 +1,35 @@
 #include "term.h"
 #include "vid.h"
 
-static int bg, fg = 15;
+static int bg, fg = LTGRAY;
 static int cursor_x, cursor_y;
 
-void set_text_color(int c)
+/* sets the active text color and returns previous value */
+int set_text_color(int c)
 {
+	int prev = fg;
+
 	if(c >= 0 && c < 16) {
 		fg = c;
 	}
+	return prev;
 }
 
-void set_back_color(int c)
+/* sets the active background color and returns the current value */
+int set_back_color(int c)
 {
+	int prev = bg;
+
 	if(c >= 0 && c < 16) {
 		bg = c;
 	}
+	return prev;
 }
 
+/* output a single character, handles formatting, cursor advancement
+ * and scrolling the screen when we reach the bottom.
+ * TODO make visible cursor actually move.
+ */
 int putchar(int c)
 {
 	switch(c) {
@@ -38,10 +50,12 @@ int putchar(int c)
 		break;
 
 	default:
-		set_char(c, cursor_x, cursor_y, fg, bg);
-		if(++cursor_x >= WIDTH) {
-			cursor_x = 0;
-			cursor_y++;
+		if(isprint(c)) {
+			set_char(c, cursor_x, cursor_y, fg, bg);
+			if(++cursor_x >= WIDTH) {
+				cursor_x = 0;
+				cursor_y++;
+			}
 		}
 	}
 
@@ -49,5 +63,7 @@ int putchar(int c)
 		scroll_scr();
 		cursor_y--;
 	}
+
+	set_cursor(cursor_x, cursor_y);
 	return c;
 }

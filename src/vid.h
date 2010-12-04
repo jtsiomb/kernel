@@ -1,9 +1,10 @@
 #ifndef VID_H_
 #define VID_H_
 
-#define WIDTH	80
-#define HEIGHT	25
+#define WIDTH			80
+#define HEIGHT			25
 
+/* the standard CGA color palette */
 enum {
 	BLACK,
 	BLUE,
@@ -23,8 +24,9 @@ enum {
 	WHITE
 };
 
-void clear_scr(int color);
+void clear_scr(void);
 void set_char(char c, int x, int y, int fg, int bg);
+void set_cursor(int x, int y);
 void scroll_scr(void);
 
 #endif	/* VID_H_ */

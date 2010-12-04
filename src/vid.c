@@ -1,24 +1,145 @@
+#if 0
+
 #include <string.h>
 #include "vid.h"
+#include "asmops.h"
+
+/* height of our virtual console text buffer */
+#define VIRT_HEIGHT	1024
+
+/* CRTC ports */
+#define CRTC_ADDR	0x3d4
+#define CRTC_DATA	0x3d5
+
+/* CRTC registers */
+#define CRTC_START_HIGH		0xc
+#define CRTC_START_LOW		0xd
+#define CRTC_CURSOR_HIGH	0xe
+#define CRTC_CURSOR_LOW		0xf
+
+/* construct a character with its attributes */
+#define VMEM_CHAR(c, fg, bg) \
+	((uint16_t)(c) | (((uint16_t)(fg) & 0xf) << 8) | (((uint16_t)(bg) & 0xf) << 12))
+
+static void set_start_line(int line);
 
 static uint16_t *vmem = (uint16_t*)0xb8000;
+static int start_line;
 
-void clear_scr(int color)
+
+void clear_scr(void)
 {
-	memset(vmem, 0, WIDTH * HEIGHT * 2);
+	memset16(vmem, VMEM_CHAR(' ', LTGRAY, BLACK), WIDTH * HEIGHT);
+	start_line = 0;
+	set_start_line(0);
+	set_cursor(0, 0);
 }
 
 void set_char(char c, int x, int y, int fg, int bg)
 {
-	uint16_t attr = (fg & 0xf) | ((bg & 7) << 4);
-	vmem[y * WIDTH + x] = (uint16_t)c | (attr << 8);
+	vmem[(y + start_line) * WIDTH + x] = VMEM_CHAR(c, fg, bg);
+}
+
+void set_cursor(int x, int y)
+{
+	int loc;
+
+	if(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+		loc = 0xffff;
+	} else {
+		loc = (y + start_line) * WIDTH + x;
+	}
+
+	outb(CRTC_CURSOR_LOW, CRTC_ADDR);
+	outb(loc, CRTC_DATA);
+	outb(CRTC_CURSOR_HIGH, CRTC_ADDR);
+	outb(loc >> 8, CRTC_DATA);
 }
 
 void scroll_scr(void)
 {
-	/* copy the second up to last text line, one line back, then
-	 * clear the last line.
-	 */
-	memmove(vmem, vmem + WIDTH, WIDTH * (HEIGHT - 1) * 2);
-	memset(vmem + WIDTH * (HEIGHT -1), 0, WIDTH * 2);
+	if(++start_line > VIRT_HEIGHT - HEIGHT) {
+		/* The bottom of the visible range reached the end of our text buffer.
+		 * Copy the rest of the lines to the top and reset start_line.
+		 */
+		memcpy(vmem, vmem + start_line * WIDTH, (HEIGHT - 1) * WIDTH);
+		start_line = 0;
+	}
+
+	/* clear the next line that will be revealed by scrolling */
+	int new_line = start_line + HEIGHT - 1;
+	memset16(vmem + new_line * WIDTH, VMEM_CHAR(' ', LTGRAY, BLACK), WIDTH);
+
+	set_start_line(start_line);
 }
+
+static void set_start_line(int line)
+{
+	int start_addr = line * WIDTH;
+
+	outb(CRTC_START_LOW, CRTC_ADDR);
+	outb(start_addr & 0xff, CRTC_DATA);
+	outb(CRTC_START_HIGH, CRTC_ADDR);
+	outb((start_addr >> 8) & 0xff, CRTC_DATA);
+}
+#endif	/* 0 */
+
+#include <string.h>
+#include "vid.h"
+#include "asmops.h"
+
+#define WIDTH 80
+#define HEIGHT 25
+
+/* CRTC ports */
+#define CRTC_ADDR   0x3d4
+#define CRTC_DATA   0x3d5
+
+/* CRTC registers */
+#define CRTC_CURSOR_HIGH 0xe
+#define CRTC_CURSOR_LOW  0xf
+
+/* construct a character with its attributes */
+#define VMEM_CHAR(c, fg, bg) \
+    ((uint16_t)(c) | (((uint16_t)(fg) & 0xf) << 8) | \
+     (((uint16_t)(bg) & 0xf) << 12))
+
+#define CLEAR_CHAR	VMEM_CHAR(' ', LTGRAY, BLACK)
+
+/* pointer to the text mode video memory */
+static uint16_t *vmem = (uint16_t*)0xb8000;
+
+void clear_scr(void)
+{
+    memset16(vmem, CLEAR_CHAR, WIDTH * HEIGHT);
+}
+
+void set_char(char c, int x, int y, int fg, int bg)
+{
+    vmem[y * WIDTH + x] = VMEM_CHAR(c, fg, bg);
+}
+
+void set_cursor(int x, int y)
+{
+	int loc;
+    if(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
+        loc = 0xffff;
+    } else {
+        loc = y * WIDTH + x;
+    }
+
+    /* tell the vga where we want the cursor by writing
+     * to the "cursor address" register of the CRTC */
+    outb(CRTC_CURSOR_LOW, CRTC_ADDR);
+    outb(loc, CRTC_DATA);
+    outb(CRTC_CURSOR_HIGH, CRTC_ADDR);
+    outb(loc >> 8, CRTC_DATA);
+}
+
+void scroll_scr(void)
+{
+    /* simple scrolling by manually copying memory */
+    memmove(vmem, vmem + WIDTH, WIDTH * (HEIGHT - 1) * 2);
+    memset16(vmem + WIDTH * (HEIGHT - 1), CLEAR_CHAR, WIDTH);
+}
+
