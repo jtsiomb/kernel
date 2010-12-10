@@ -1,3 +1,43 @@
-Code for article 1
+Article 1 source code
+---------------------
 Author: John Tsiombikas <nuclear@member.fsf.org>
-License: GNU GPL v3 (or later).
+
+License: GNU GPL v3 or any later version published by the free software
+    foundation. See COPYING for details.
+
+About
+-----
+This is the supplemental source code for the first part of the introduction to
+kernel development articles. It deals with booting up from a multiboot-compliant
+boot loader and using the VGA for text output.
+
+Compiling & Running
+-------------------
+To compile kernel image (kernel.elf) just type make (or gmake, if your default
+make tool is not GNU make). A script called "run" is supplied that will use qemu
+to run the kernel in a virtual machine.
+
+If you wish to boot up the kernel on your computer you need a multiboot
+compliant boot loader like GRUB. Since you probably already have GRUB installed
+if you're running a GNU/Linux distribution, just add an entry to the GRUB config
+file (commonly /boot/grub/menu.lst) similar to this one and reboot:
+
+title My kernel
+root (hdX,Y)  # where X is the disk number and Y the partition (first being 0)
+kernel /path/to/kernel_code/kernel.elf    # change this to the actual path
+
+In case you are using GRUB 2 instead of the original GRUB, you'll have to
+consult the documentation on how to modify the above into the GRUB 2 syntax.
+
+Disclaimer
+----------
+All programs contain bugs, and this sample code will undoubtedly have its share.
+Running buggy kernel code on the real machine is very dangerous and may result
+in data loss or even damage to your computer in extreme cases. The author
+assumes no responsibility for any such eventuality. Run this code on your
+computer at your own risk.
+
+Contact
+-------
+For any comments or suggestions regarding the articles or this supplemental
+code, please contact me at nuclear@member.fsf.org

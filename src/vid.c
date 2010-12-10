@@ -1,5 +1,3 @@
-#if 0
-
 #include <string.h>
 #include "vid.h"
 #include "asmops.h"
@@ -82,64 +80,3 @@ static void set_start_line(int line)
 	outb(CRTC_START_HIGH, CRTC_ADDR);
 	outb((start_addr >> 8) & 0xff, CRTC_DATA);
 }
-#endif	/* 0 */
-
-#include <string.h>
-#include "vid.h"
-#include "asmops.h"
-
-#define WIDTH 80
-#define HEIGHT 25
-
-/* CRTC ports */
-#define CRTC_ADDR   0x3d4
-#define CRTC_DATA   0x3d5
-
-/* CRTC registers */
-#define CRTC_CURSOR_HIGH 0xe
-#define CRTC_CURSOR_LOW  0xf
-
-/* construct a character with its attributes */
-#define VMEM_CHAR(c, fg, bg) \
-    ((uint16_t)(c) | (((uint16_t)(fg) & 0xf) << 8) | \
-     (((uint16_t)(bg) & 0xf) << 12))
-
-#define CLEAR_CHAR	VMEM_CHAR(' ', LTGRAY, BLACK)
-
-/* pointer to the text mode video memory */
-static uint16_t *vmem = (uint16_t*)0xb8000;
-
-void clear_scr(void)
-{
-    memset16(vmem, CLEAR_CHAR, WIDTH * HEIGHT);
-}
-
-void set_char(char c, int x, int y, int fg, int bg)
-{
-    vmem[y * WIDTH + x] = VMEM_CHAR(c, fg, bg);
-}
-
-void set_cursor(int x, int y)
-{
-	int loc;
-    if(x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) {
-        loc = 0xffff;
-    } else {
-        loc = y * WIDTH + x;
-    }
-
-    /* tell the vga where we want the cursor by writing
-     * to the "cursor address" register of the CRTC */
-    outb(CRTC_CURSOR_LOW, CRTC_ADDR);
-    outb(loc, CRTC_DATA);
-    outb(CRTC_CURSOR_HIGH, CRTC_ADDR);
-    outb(loc >> 8, CRTC_DATA);
-}
-
-void scroll_scr(void)
-{
-    /* simple scrolling by manually copying memory */
-    memmove(vmem, vmem + WIDTH, WIDTH * (HEIGHT - 1) * 2);
-    memset16(vmem + WIDTH * (HEIGHT - 1), CLEAR_CHAR, WIDTH);
-}
-

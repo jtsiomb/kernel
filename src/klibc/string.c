@@ -8,6 +8,9 @@ void memset(void *s, int c, size_t n)
 	}
 }
 
+/* Does the same thing as memset only with 16bit values.
+ * n in this case is the number of values, not the number of bytes.
+ */
 void memset16(void *s, int c, size_t n)
 {
 	short *ptr = s;

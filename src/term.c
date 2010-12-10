@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include "term.h"
 #include "vid.h"
 
