@@ -6,4 +6,10 @@
 typedef int32_t ssize_t;
 typedef uint32_t size_t;
 
+int atoi(const char *str);
+long atol(const char *str);
+
+void itoa(int val, char *buf, int base);
+void utoa(unsigned int val, char *buf, int base);
+
 #endif	/* STDLIB_H_ */

@@ -54,3 +54,37 @@ void *memmove(void *dest, const void *src, size_t n)
 
 	return dest;
 }
+
+size_t strlen(const char *s)
+{
+	size_t len = 0;
+	while(*s++) len++;
+	return len;
+}
+
+char *strchr(const char *s, int c)
+{
+	while(*s) {
+		if(*s == c) {
+			return s;
+		}
+		s++;
+	}
+	return 0;
+}
+
+char *strrchr(const char *s, int c)
+{
+	char *ptr = s;
+
+	/* find the end */
+	while(*ptr) ptr++;
+
+	/* go back checking for c */
+	while(*--ptr >= s) {
+		if(*ptr == c) {
+			return ptr;
+		}
+	}
+	return 0;
+}
