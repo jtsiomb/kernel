@@ -12,10 +12,5 @@ void init_segm(void);
 
 uint16_t selector(int idx, int rpl);
 
-/* these functions are implemented in segm-asm.S */
-void setup_selectors(uint16_t code, uint16_t data);
-void set_gdt(uint32_t addr, uint16_t limit);
-
-
 
 #endif	/* SEGM_H_ */

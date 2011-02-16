@@ -1,27 +1,25 @@
 	.data
+	.align 4
+/* memory reserved for setup_selectors */
 off:.long 0
 seg:.short 0
-
-	.align
-	.short 0
-gdt_lim:
-	.short 0
-gdt_addr:
-	.long 0
+/* memory reserved for set_gdt */
+lim:.short 0
+addr:.long 0
 
 	.text
 /* setup_selectors(uint16_t code, uint16_t data)
  * loads the requested selectors to all the selector registers */
 	.globl setup_selectors
 setup_selectors:
-	/* setup data selectors */
+	/* set data selectors directly */
 	movl 8(%esp), %eax
 	movw %ax, %ss
 	movw %ax, %es
 	movw %ax, %ds
 	movw %ax, %gs
 	movw %ax, %fs
-	/* setup code selector */
+	/* set cs using a long jump */
 	movl 4(%esp), %eax
 	movw %ax, (seg)
 	movl $ldcs, (off)
@@ -34,8 +32,8 @@ ldcs:
 	.globl set_gdt
 set_gdt:
 	movl 4(%esp), %eax
-	movl %eax, (gdt_addr)
+	movl %eax, (addr)
 	movw 8(%esp), %ax
-	movw %ax, (gdt_lim)
-	lgdt (gdt_lim)	
+	movw %ax, (lim)
+	lgdt (lim)	
 	ret

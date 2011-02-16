@@ -1,6 +1,7 @@
 #include <string.h>
 #include "segm.h"
 
+/* bits for the 3rd 16bt part of the descriptor */
 #define BIT_ACCESSED	(1 << 8)
 #define BIT_WR			(1 << 9)
 #define BIT_RD			(1 << 9)
@@ -10,6 +11,7 @@
 #define BIT_NOSYS		(1 << 12)
 #define BIT_PRESENT		(1 << 15)
 
+/* bits for the last 16bit part of the descriptor */
 #define BIT_BIG			(1 << 6)
 #define BIT_DEFAULT		(1 << 6)
 #define BIT_GRAN		(1 << 7)
@@ -18,7 +20,12 @@ enum {TYPE_DATA, TYPE_CODE};
 
 static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type);
 
+/* these functions are implemented in segm-asm.S */
+void setup_selectors(uint16_t code, uint16_t data);
+void set_gdt(uint32_t addr, uint16_t limit);
 
+
+/* our global descriptor table */
 static desc_t gdt[4];
 
 
@@ -33,6 +40,7 @@ void init_segm(void)
 	setup_selectors(selector(SEGM_KCODE, 0), selector(SEGM_KDATA, 0));
 }
 
+/* constructs a GDT selector based on index and priviledge level */
 uint16_t selector(int idx, int rpl)
 {
 	return (idx << 3) | (rpl & 3);
