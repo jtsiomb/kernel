@@ -2,6 +2,7 @@
 #include "vid.h"
 #include "term.h"
 #include <asmops.h>
+#include "segm.h"
 
 /* special keys */
 enum {
@@ -31,11 +32,12 @@ static int keycodes[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0									/* 70 - 7f */
 };
 
-
 void kmain(void)
 {
 	clear_scr();
 	puts("kernel starting up");
+
+	init_segm();
 
 	set_text_color(YELLOW);
 	puts("<initialization code goes here>");
@@ -49,7 +51,7 @@ void kmain(void)
 		} while(!(keypress & 1));
 		inb(c, 0x60);
 		if(!(c & 0x80)) {
-			putchar(keycodes[c]);
+			putchar(keycodes[(int)c]);
 		}
 	}
 }

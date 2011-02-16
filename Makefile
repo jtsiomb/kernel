@@ -1,6 +1,7 @@
 # collect all of our C and assembly source files
 csrc = $(wildcard src/*.c) $(wildcard src/klibc/*.c)
 asmsrc = $(wildcard src/*.S) $(wildcard src/klibc/*.S)
+dep = $(asmsrc:.S=.d) $(csrc:.c=.d)
 
 # each source file will generate one object file
 obj = $(asmsrc:.S=.o) $(csrc:.c=.o)
@@ -20,6 +21,18 @@ bin = kernel.elf
 $(bin): $(obj)
 	ld -melf_i386 -o $@ -Ttext 0x100000 -e kentry $(obj)
 
+-include $(dep)
+
+%.d: %.c
+	@$(CPP) $(CFLAGS) -MM -MT $(@:.d=.o) $< >$@
+
+%.d: %.S
+	@$(CPP) $(ASFLAGS) -MM -MT $(@:.d=.o) $< >$@
+
 .PHONY: clean
 clean:
 	rm -f $(obj) $(bin)
+
+.PHONY: cleandep
+cleandep:
+	rm -f $(dep)
