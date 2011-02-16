@@ -66,7 +66,7 @@ char *strchr(const char *s, int c)
 {
 	while(*s) {
 		if(*s == c) {
-			return s;
+			return (char*)s;
 		}
 		s++;
 	}
@@ -75,15 +75,15 @@ char *strchr(const char *s, int c)
 
 char *strrchr(const char *s, int c)
 {
-	char *ptr = s;
+	const char *ptr = s;
 
 	/* find the end */
 	while(*ptr) ptr++;
 
 	/* go back checking for c */
-	while(*--ptr >= s) {
+	while(--ptr >= s) {
 		if(*ptr == c) {
-			return ptr;
+			return (char*)ptr;
 		}
 	}
 	return 0;
