@@ -1,5 +1,6 @@
 #include <string.h>
 #include "segm.h"
+#include "desc.h"
 
 /* bits for the 3rd 16bt part of the descriptor */
 #define BIT_ACCESSED	(1 << 8)
@@ -26,7 +27,7 @@ void set_gdt(uint32_t addr, uint16_t limit);
 
 
 /* our global descriptor table */
-static desc_t gdt[4];
+static desc_t gdt[3];
 
 
 void init_segm(void)

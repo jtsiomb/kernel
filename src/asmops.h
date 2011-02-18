@@ -1,13 +1,17 @@
 #ifndef ASMOPS_H_
 #define ASMOPS_H_
 
+#define enable_intr() asm volatile("sti")
+#define disable_intr() asm volatile("cli")
+#define halt_cpu() asm volatile("hlt")
+
 #define inb(dest, port) asm volatile( \
 	"inb %1, %0\n\t" \
 	: "=a" ((unsigned char)(dest)) \
 	: "dN" ((unsigned short)(port)))
 
-#define ins(dest, port) asm volatile( \
-	"ins %1, %0\n\t" \
+#define inw(dest, port) asm volatile( \
+	"inw %1, %0\n\t" \
 	: "=a" ((unsigned short)(dest)) \
 	: "dN" ((unsigned short)(port)))
 
@@ -20,8 +24,8 @@
 	"outb %0, %1\n\t" \
 	:: "a" ((unsigned char)(src)), "dN" ((unsigned short)(port)))
 
-#define outs(src, port) asm volatile( \
-	"outs %0, %1\n\t" \
+#define outw(src, port) asm volatile( \
+	"outw %0, %1\n\t" \
 	:: "a" ((unsigned short)(src)), "dN" ((unsigned short)(port)))
 
 #define outl(src, port) asm volatile( \

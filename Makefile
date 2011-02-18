@@ -1,6 +1,6 @@
 # collect all of our C and assembly source files
-csrc = $(wildcard src/*.c) $(wildcard src/klibc/*.c)
-asmsrc = $(wildcard src/*.S) $(wildcard src/klibc/*.S)
+csrc = $(wildcard src/boot/*.c) $(wildcard src/*.c) $(wildcard src/klibc/*.c)
+asmsrc = $(wildcard src/boot/*.S) $(wildcard src/*.S) $(wildcard src/klibc/*.S)
 dep = $(asmsrc:.S=.d) $(csrc:.c=.d)
 
 # each source file will generate one object file
@@ -19,7 +19,7 @@ bin = kernel.elf
 # we need to specify where to assume the text section (code) is going
 # in memory, as well as the kernel entry point (kentry).
 $(bin): $(obj)
-	ld -melf_i386 -o $@ -Ttext 0x100000 -e kentry $(obj)
+	ld -melf_i386 -o $@ -Ttext 0x100000 -e kentry $(obj) -Map link.map
 
 -include $(dep)
 

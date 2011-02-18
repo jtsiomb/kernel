@@ -3,6 +3,7 @@
 #include "term.h"
 #include <asmops.h>
 #include "segm.h"
+#include "intr.h"
 
 /* special keys */
 enum {
@@ -38,6 +39,7 @@ void kmain(void)
 	puts("kernel starting up");
 
 	init_segm();
+	init_intr();
 
 	set_text_color(YELLOW);
 	puts("<initialization code goes here>");
