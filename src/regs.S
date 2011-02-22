@@ -43,9 +43,9 @@ get_regs:
 	movl %ebx, 60(%edx)
 	/*movl %cr1, %ebx
 	movl %ebx, 64(%edx)*/
-	movl %cr3, %ebx
+	movl %cr2, %ebx
 	movl %ebx, 68(%edx)
-	movl %cr4, %ebx
+	movl %cr3, %ebx
 	movl %ebx, 72(%edx)
 	popl %ebx
 
