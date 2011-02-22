@@ -4,6 +4,7 @@
 #include <asmops.h>
 #include "segm.h"
 #include "intr.h"
+#include "panic.h"
 
 /* special keys */
 enum {
@@ -47,6 +48,8 @@ void kmain(void)
 	puts("hello world!");
 
 	asm volatile("int $0x80");
+
+	panic("foo\n");
 
 	for(;;) {
 		char c, keypress;
