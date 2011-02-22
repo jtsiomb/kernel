@@ -46,6 +46,8 @@ void kmain(void)
 	set_text_color(LTGRAY);
 	puts("hello world!");
 
+	asm volatile("int $0x80");
+
 	for(;;) {
 		char c, keypress;
 		do {

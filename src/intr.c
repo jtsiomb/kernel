@@ -159,7 +159,7 @@ static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int ty
 	desc->d[3] = (addr & 0xffff0000) >> 16;
 }
 
-#define IS_TRAP(n)	((n) < 20 && (n) != 2)
+#define IS_TRAP(n)	((n) < 32)
 static void set_intr_entry(int num, void (*handler)(void))
 {
 	int type = IS_TRAP(num) ? GATE_TRAP : GATE_INTR;

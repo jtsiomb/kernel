@@ -3,7 +3,7 @@
 #include "asmops.h"
 
 /* height of our virtual console text buffer */
-#define VIRT_HEIGHT	1024
+#define VIRT_HEIGHT	200
 
 /* CRTC ports */
 #define CRTC_ADDR	0x3d4
@@ -60,7 +60,7 @@ void scroll_scr(void)
 		/* The bottom of the visible range reached the end of our text buffer.
 		 * Copy the rest of the lines to the top and reset start_line.
 		 */
-		memcpy(vmem, vmem + start_line * WIDTH, (HEIGHT - 1) * WIDTH);
+		memcpy(vmem, vmem + start_line * WIDTH, (HEIGHT - 1) * WIDTH * 2);
 		start_line = 0;
 	}
 
