@@ -9,7 +9,6 @@
 	.long MAGIC
 	.long FLAGS
 	.long -(MAGIC + FLAGS)	/* checksum */
-	.fill 5, 4, 0	/* fill out the rest with zeroes */
 
 	.globl kentry
 kentry:
