@@ -1,5 +1,6 @@
 #define MAGIC		0x1badb002
-#define FLAGS		0
+/* flags with bit 1 set means we need memory info */
+#define FLAGS		2
 #define STACK_SIZE	0x4000
 
 	.text
@@ -17,7 +18,9 @@ kentry:
 	/* reset eflags register */
 	pushl $0
 	popf
-	/* call the kernel main function */
+	/* call the kernel main function. ebx points to the
+     * multiboot information structure */
+	push %ebx
 	call kmain
 	/* we dropped out of main, halt the CPU */
 	cli

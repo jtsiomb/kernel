@@ -8,10 +8,12 @@ obj = $(asmsrc:.S=.o) $(csrc:.c=.o)
 
 CC = gcc
 
+inc = -Isrc -Isrc/klibc -Isrc/boot
+
 # -nostdinc instructs the compiler to ignore standard include directories
 # -m32 instructs the compiler to produce 32bit code (in case we have a 64bit compiler)
-CFLAGS = -m32 -Wall -g -nostdinc -fno-builtin -Isrc -Isrc/klibc
-ASFLAGS = -m32 -g -nostdinc -fno-builtin -Isrc -Isrc/klibc
+CFLAGS = -m32 -Wall -g -nostdinc -fno-builtin $(inc)
+ASFLAGS = -m32 -g -nostdinc -fno-builtin $(inc)
 
 bin = kernel.elf
 

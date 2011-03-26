@@ -1,10 +1,13 @@
 #include <stdio.h>
+#include "mboot.h"
 #include "vid.h"
 #include "term.h"
-#include <asmops.h>
+#include "asmops.h"
 #include "segm.h"
 #include "intr.h"
-#include "panic.h"
+#include "vm.h"
+
+static void do_nothing();
 
 /* special keys */
 enum {
@@ -34,22 +37,26 @@ static int keycodes[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0									/* 70 - 7f */
 };
 
-void kmain(void)
+void kmain(struct mboot_info *mbinf)
 {
 	clear_scr();
+
+	/* pointless verbal diarrhea */
+	if(mbinf->flags & MB_LDRNAME) {
+		printf("loaded by: %s\n", mbinf->boot_loader_name);
+	}
+	if(mbinf->flags & MB_CMDLINE) {
+		printf("kernel command line: %s\n", mbinf->cmdline);
+	}
+
 	puts("kernel starting up");
 
 	init_segm();
 	init_intr();
+	init_vm(mbinf);
 
-	set_text_color(YELLOW);
-	puts("<initialization code goes here>");
-	set_text_color(LTGRAY);
-	puts("hello world!");
-
-	asm volatile("int $0x80");
-
-	panic("foo\n");
+	/* silence the blasted timer interrupt */
+	interrupt(32, do_nothing);
 
 	for(;;) {
 		char c, keypress;
@@ -61,4 +68,8 @@ void kmain(void)
 			putchar(keycodes[(int)c]);
 		}
 	}
+}
+
+static void do_nothing()
+{
 }
