@@ -20,6 +20,7 @@
 #define PGSIZE					4096
 #define PGOFFS_MASK				0xfff
 #define PGNUM_MASK				0xfffff000
+#define PGENT_ADDR_MASK			PGNUM_MASK
 
 #define ADDR_TO_PAGE(x)		((uint32_t)(x) >> 12)
 #define PAGE_TO_ADDR(x)		((uint32_t)(x) << 12)
@@ -38,5 +39,7 @@ void map_page(int vpage, int ppage, unsigned int attr);
 void map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr);
 
 void map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr);
+
+uint32_t virt_to_phys(uint32_t vaddr);
 
 #endif	/* VM_H_ */
