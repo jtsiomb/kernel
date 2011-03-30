@@ -53,10 +53,12 @@ void kmain(struct mboot_info *mbinf)
 
 	init_segm();
 	init_intr();
-	init_vm(mbinf);
 
 	/* silence the blasted timer interrupt */
 	interrupt(32, do_nothing);
+
+	init_vm(mbinf);
+
 
 	for(;;) {
 		char c, keypress;

@@ -29,13 +29,16 @@ static uint32_t *pgdir;
 
 void init_vm(struct mboot_info *mb)
 {
+	uint32_t idmap_end;
+
 	init_mem(mb);
 
 	pgdir = (uint32_t*)alloc_phys_page();
 	memset(pgdir, 0, sizeof pgdir);
 
 	/* map the video memory and kernel code 1-1 */
-	map_mem_range(IDMAP_START, MAX_BRK - IDMAP_START, IDMAP_START, 0);
+	get_kernel_mem_range(0, &idmap_end);
+	map_mem_range(IDMAP_START, idmap_end - IDMAP_START, IDMAP_START, 0);
 
 	interrupt(PAGEFAULT, pgfault);
 
@@ -109,28 +112,6 @@ void map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr)
 	map_page_range(vpg_start, num_pages, ppg_start, attr);
 }
 
-
-/*	if(mb->flags & MB_MMAP) {
-		struct mboot_mmap *mem, *mmap_end;
-
-		mem = mb->mmap;
-		mmap_end = (struct mboot_mmap*)((char*)mb->mmap + mb->mmap_len);
-
-		printf("memory map:\n");
-		while(mem < mmap_end) {
-			unsigned int end = mem->base_low + mem->length_low;
-			char *type = mem->type == MB_MEM_VALID ? "free:" : "hole:";
-
-			printf("  %s %x - %x (%u bytes)\n", type, mem->base_low, end, mem->length_low);
-			mem = (struct mboot_mmap*)((char*)mem + mem->skip + sizeof mem->skip);
-		}
-	}
-
-	if(mb->flags & MB_MEM) {
-		printf("lower memory: %ukb, upper mem: %ukb\n", mb->mem_lower, mb->mem_upper);
-	}
-*/
-
 uint32_t virt_to_phys(uint32_t vaddr)
 {
 	uint32_t pgaddr, *pgtbl;
@@ -166,4 +147,6 @@ static void pgfault(int inum, uint32_t err)
 	} else {
 		printf("page not present\n");
 	}
+
+	panic("unhandled page fault\n");
 }
