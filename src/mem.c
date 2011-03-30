@@ -18,8 +18,17 @@ static void add_memory(uint32_t start, size_t size);
 /* end of kernel image */
 extern int _end;
 
+/* A bitmap is used to track which physical memory pages are used or available
+ * for allocation by alloc_phys_page.
+ *
+ * last_alloc_idx keeps track of the last 32bit element in the bitmap array
+ * where a free page was found. It's guaranteed that all the elements before
+ * this have no free pages, but it doesn't imply that there will be another
+ * free page there. So it's used as a starting point for the search.
+ */
 static uint32_t *bitmap;
 static int bmsize, last_alloc_idx;
+
 
 void init_mem(struct mboot_info *mb)
 {
@@ -29,12 +38,19 @@ void init_mem(struct mboot_info *mb)
 	num_pages = 0;
 	last_alloc_idx = 0;
 
+	/* the allocation bitmap starts right at the end of the ELF image */
 	bitmap = (uint32_t*)&_end;
 
-	/* start by marking all posible pages as used */
+	/* start by marking all posible pages (2**20) as used. We do not "reserve"
+	 * all this space. Pages beyond the end of the useful bitmap area
+	 * ((char*)bitmap + bmsize), which will be determined after we traverse the
+	 * memory map, are going to be marked as available for allocation.
+	 */
 	memset(bitmap, 0xff, 1024 * 1024 / 8);
 
-	/* build the memory map */
+	/* if the bootloader gave us an available memory map, traverse it and mark
+	 * all the corresponding pages as free.
+	 */
 	if(mb->flags & MB_MMAP) {
 		struct mboot_mmap *mem, *mmap_end;
 
@@ -62,16 +78,20 @@ void init_mem(struct mboot_info *mb)
 			mem = (struct mboot_mmap*)((char*)mem + mem->skip + sizeof mem->skip);
 		}
 	} else if(mb->flags & MB_MEM) {
+		/* if we don't have a detailed memory map, just use the lower and upper
+		 * memory block sizes to determine which pages should be available.
+		 */
 		add_memory(0, mb->mem_lower);
 		add_memory(0x100000, mb->mem_upper * 1024);
 		max_pg = mb->mem_upper / 4;
 
 		printf("lower memory: %ukb, upper mem: %ukb\n", mb->mem_lower, mb->mem_upper);
 	} else {
+		/* I don't think this should ever happen with a multiboot-compliant boot loader */
 		panic("didn't get any memory info from the boot loader, I give up\n");
 	}
 
-	bmsize = max_pg / 8;	/* size of the bitmap in bytes */
+	bmsize = max_pg / 8;	/* size of the useful bitmap in bytes */
 
 	/* mark all the used pages as ... well ... used */
 	used_end = ((uint32_t)bitmap + bmsize - 1);
@@ -83,14 +103,12 @@ void init_mem(struct mboot_info *mb)
 	for(i=0; i<=used_end; i++) {
 		mark_page(i, USED);
 	}
-
-	/*for(i=0; i<bmsize / 4; i++) {
-		printf("%3d [%x]\n", i, bitmap[i]);
-		asm("hlt");
-	}
-	putchar('\n');*/
 }
 
+/* alloc_phys_page finds the first available page of physical memory,
+ * marks it as used in the bitmap, and returns its address. If there's
+ * no unused physical page, 0 is returned.
+ */
 uint32_t alloc_phys_page(void)
 {
 	int i, idx, max;
@@ -120,10 +138,17 @@ uint32_t alloc_phys_page(void)
 		idx++;
 	}
 
-	panic("alloc_phys_page(): out of memory\n");
 	return 0;
 }
 
+/* free_phys_page marks the physical page which corresponds to the specified
+ * address as free in the allocation bitmap.
+ *
+ * CAUTION: no checks are done that this page should actually be freed or not.
+ * If you call free_phys_page with the address of some part of memory that was
+ * originally reserved due to it being in a memory hole or part of the kernel
+ * image or whatever, it will be subsequently allocatable by alloc_phys_page.
+ */
 void free_phys_page(uint32_t addr)
 {
 	int pg = ADDR_TO_PAGE(addr);
@@ -139,6 +164,9 @@ void free_phys_page(uint32_t addr)
 	}
 }
 
+/* this is only ever used by the VM init code to find out what the extends of
+ * the kernel image are, in order to map them 1-1 before enabling paging.
+ */
 void get_kernel_mem_range(uint32_t *start, uint32_t *end)
 {
 	if(start) {
@@ -155,6 +183,9 @@ void get_kernel_mem_range(uint32_t *start, uint32_t *end)
 	}
 }
 
+/* adds a range of physical memory to the available pool. used during init_mem
+ * when traversing the memory map.
+ */
 static void add_memory(uint32_t start, size_t sz)
 {
 	int i, szpg, pg;
@@ -167,6 +198,7 @@ static void add_memory(uint32_t start, size_t sz)
 	}
 }
 
+/* maps a page as used or free in the allocation bitmap */
 static void mark_page(int pg, int used)
 {
 	int idx = BM_IDX(pg);
