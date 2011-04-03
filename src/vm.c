@@ -8,16 +8,6 @@
 #include "panic.h"
 
 
-/* defined in vm-asm.S */
-void enable_paging(void);
-void set_pgdir_addr(uint32_t addr);
-uint32_t get_fault_addr(void);
-
-static void pgfault(int inum, uint32_t err);
-
-/* page directory */
-static uint32_t *pgdir;
-
 #define KMEM_START		0xc0000000
 #define IDMAP_START		0xa0000
 
@@ -26,6 +16,30 @@ static uint32_t *pgdir;
 #define ADDR_PGENT_MASK	0xfffff000
 
 #define PAGEFAULT		14
+
+
+struct page_range {
+	int start, end;
+	struct page_range *next;
+};
+
+/* defined in vm-asm.S */
+void enable_paging(void);
+void set_pgdir_addr(uint32_t addr);
+uint32_t get_fault_addr(void);
+
+static void pgfault(int inum, uint32_t err);
+static struct page_range *alloc_node(void);
+static void free_node(struct page_range *node);
+
+/* page directory */
+static uint32_t *pgdir;
+
+/* 2 lists of free ranges, for kernel memory and user memory */
+static struct page_range *pglist[2];
+/* list of free page_range structures to be used in the lists */
+static struct page_range *node_pool;
+
 
 void init_vm(struct mboot_info *mb)
 {
@@ -86,12 +100,15 @@ err:
 	printf("unmap_page(%d): page already not mapped\n", vpage);
 }
 
+/* if ppg_start is -1, we allocate physical pages to map with alloc_phys_page() */
 void map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr)
 {
 	int i;
 
 	for(i=0; i<pgcount; i++) {
-		map_page(vpg_start + i, ppg_start + i, attr);
+		uint32_t paddr = ppg_start == -1 ? alloc_phys_page() : ppg_start + i;
+
+		map_page(vpg_start + i, paddr, attr);
 	}
 }
 
@@ -131,6 +148,52 @@ uint32_t virt_to_phys(uint32_t vaddr)
 	return pgaddr | ADDR_TO_PGOFFS(vaddr);
 }
 
+/* allocate a contiguous block of virtual memory pages along with
+ * backing physical memory for them, and update the page table.
+ */
+int pgalloc(int num, int area)
+{
+	int ret = -1;
+	struct page_range *node, *prev, dummy;
+
+	dummy.next = pglist[area];
+	node = pglist[area];
+	prev = &dummy;
+
+	while(node) {
+		if(node->end - node->start >= num) {
+			ret = node->start;
+			node->start += num;
+
+			if(node->start == node->end) {
+				prev->next = node->next;
+				node->next = 0;
+
+				if(node == pglist[area]) {
+					pglist[area] = 0;
+				}
+				free_node(node);
+			}
+			break;
+		}
+
+		prev = node;
+		node = node->next;
+	}
+
+	if(ret >= 0) {
+		/* allocate physical storage and map them */
+		map_page_range(ret, num, -1, 0);
+	}
+
+	return ret;
+}
+
+void pgfree(int start, int num)
+{
+	/* TODO */
+}
+
 static void pgfault(int inum, uint32_t err)
 {
 	printf("~~~~ PAGE FAULT ~~~~\n");
@@ -149,4 +212,34 @@ static void pgfault(int inum, uint32_t err)
 	}
 
 	panic("unhandled page fault\n");
+}
+
+/* --- page range list node management --- */
+static struct page_range *alloc_node(void)
+{
+	struct page_range *node;
+	uint32_t paddr;
+
+	if(node_pool) {
+		node = node_pool;
+		node_pool = node_pool->next;
+		return node;
+	}
+
+	/* no node structures in the pool, we need to allocate and map
+	 * a page, split it up into node structures, add them in the pool
+	 * and allocate one of them.
+	 */
+	if(!(paddr = alloc_phys_page())) {
+		panic("ran out of physical memory while allocating VM range structures\n");
+	}
+
+	/* TODO cont. */
+	return 0;
+}
+
+static void free_node(struct page_range *node)
+{
+	node->next = node_pool;
+	node_pool = node;
 }
