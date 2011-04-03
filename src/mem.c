@@ -59,22 +59,31 @@ void init_mem(struct mboot_info *mb)
 
 		printf("memory map:\n");
 		while(mem < mmap_end) {
-			char *type;
-			unsigned int end = mem->base_low + mem->length_low;
+			/* ignore memory ranges that start beyond the 4gb mark */
+			if(mem->base_high == 0 && mem->base_low != 0xffffffff) {
+				char *type;
+				unsigned int end, rest = 0xffffffff - mem->base_low;
 
-			if(mem->type == MB_MEM_VALID) {
-				type = "free:";
-				add_memory(mem->base_low, mem->length_low);
-
-				num_pages = ADDR_TO_PAGE(mem->base_low + mem->length_low);
-				if(max_pg < num_pages) {
-					max_pg = num_pages;
+				/* make sure the length does not extend beyond 4gb */
+				if(mem->length_high || mem->length_low > rest) {
+					mem->length_low = rest;
 				}
-			} else {
-				type = "hole:";
-			}
+				end	= mem->base_low + mem->length_low;
 
-			printf("  %s %x - %x (%u bytes)\n", type, mem->base_low, end, mem->length_low);
+				if(mem->type == MB_MEM_VALID) {
+					type = "free:";
+					add_memory(mem->base_low, mem->length_low);
+
+					num_pages = ADDR_TO_PAGE(mem->base_low + mem->length_low);
+					if(max_pg < num_pages) {
+						max_pg = num_pages;
+					}
+				} else {
+					type = "hole:";
+				}
+
+				printf("  %s %x - %x (%u bytes)\n", type, mem->base_low, end, mem->length_low);
+			}
 			mem = (struct mboot_mmap*)((char*)mem + mem->skip + sizeof mem->skip);
 		}
 	} else if(mb->flags & MB_MEM) {
