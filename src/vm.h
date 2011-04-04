@@ -18,12 +18,14 @@
 
 
 #define PGSIZE					4096
+#define PAGE_COUNT				(1024 * 1024)
+
 #define PGOFFS_MASK				0xfff
 #define PGNUM_MASK				0xfffff000
 #define PGENT_ADDR_MASK			PGNUM_MASK
 
-#define ADDR_TO_PAGE(x)		((uint32_t)(x) >> 12)
-#define PAGE_TO_ADDR(x)		((uint32_t)(x) << 12)
+#define ADDR_TO_PAGE(x)			((uint32_t)(x) >> 12)
+#define PAGE_TO_ADDR(x)			((uint32_t)(x) << 12)
 
 #define ADDR_TO_PGTBL(x)		((uint32_t)(x) >> 22)
 #define ADDR_TO_PGTBL_PG(x)		(((uint32_t)(x) >> 12) & 0x3ff)
@@ -35,10 +37,9 @@
 
 void init_vm(struct mboot_info *mb);
 
-void map_page(int vpage, int ppage, unsigned int attr);
-void map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr);
-
-void map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr);
+int map_page(int vpage, int ppage, unsigned int attr);
+int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr);
+int map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr);
 
 uint32_t virt_to_phys(uint32_t vaddr);
 
@@ -48,5 +49,8 @@ enum {
 };
 
 int pgalloc(int num, int area);
+void pgfree(int start, int num);
+
+void dbg_print_vm(int area);
 
 #endif	/* VM_H_ */

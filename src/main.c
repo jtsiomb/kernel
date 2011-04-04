@@ -59,6 +59,8 @@ void kmain(struct mboot_info *mbinf)
 
 	init_vm(mbinf);
 
+	dbg_print_vm(MEM_USER);
+	dbg_print_vm(MEM_KERNEL);
 
 	for(;;) {
 		char c, keypress;

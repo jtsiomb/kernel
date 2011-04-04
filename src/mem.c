@@ -185,7 +185,7 @@ void get_kernel_mem_range(uint32_t *start, uint32_t *end)
 		uint32_t e = (uint32_t)bitmap + bmsize;
 
 		if(e & PGOFFS_MASK) {
-			*end = (e + 4096) & PGOFFS_MASK;
+			*end = (e + 4096) & ~PGOFFS_MASK;
 		} else {
 			*end = e;
 		}
