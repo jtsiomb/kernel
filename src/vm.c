@@ -11,6 +11,10 @@
 #define KMEM_START		0xc0000000
 #define IDMAP_START		0xa0000
 
+#define PGDIR_ADDR		0xfffff000
+#define PGTBL_BASE		(0xffffffff - 4096 * 1024 + 1)
+#define PGTBL(x)		((uint32_t*)(PGTBL_BASE + PGSIZE * (x)))
+
 #define ATTR_PGDIR_MASK	0x3f
 #define ATTR_PGTBL_MASK	0x1ff
 #define ADDR_PGENT_MASK	0xfffff000
@@ -59,11 +63,15 @@ void init_vm(struct mboot_info *mb)
 	/* setup the page tables */
 	pgdir = (uint32_t*)alloc_phys_page();
 	memset(pgdir, 0, PGSIZE);
-	set_pgdir_addr((int32_t)pgdir);
+	set_pgdir_addr((uint32_t)pgdir);
 
 	/* map the video memory and kernel code 1-1 */
 	get_kernel_mem_range(0, &idmap_end);
 	map_mem_range(IDMAP_START, idmap_end - IDMAP_START, IDMAP_START, 0);
+
+	/* make the last page directory entry point to the page directory */
+	pgdir[1023] = ((uint32_t)pgdir & ADDR_PGENT_MASK) | PG_PRESENT;
+	pgdir = (uint32_t*)PGDIR_ADDR;
 
 	/* set the page fault handler */
 	interrupt(PAGEFAULT, pgfault);
@@ -92,7 +100,6 @@ int map_page(int vpage, int ppage, unsigned int attr)
 	int diridx, pgidx, pgon;
 
 	pgon = get_paging_status();
-	disable_paging();
 
 	if(ppage < 0) {
 		uint32_t addr = alloc_phys_page();
@@ -107,20 +114,21 @@ int map_page(int vpage, int ppage, unsigned int attr)
 
 	if(!(pgdir[diridx] & PG_PRESENT)) {
 		uint32_t addr = alloc_phys_page();
-		pgtbl = (uint32_t*)addr;
-		memset(pgtbl, 0, PGSIZE);
-
 		pgdir[diridx] = addr | (attr & ATTR_PGDIR_MASK) | PG_PRESENT;
+
+		pgtbl = pgon ? PGTBL(diridx) : (uint32_t*)addr;
+		memset(pgtbl, 0, PGSIZE);
 	} else {
-		pgtbl = (uint32_t*)(pgdir[diridx] & ADDR_PGENT_MASK);
+		if(pgon) {
+			pgtbl = PGTBL(diridx);
+		} else {
+			pgtbl = (uint32_t*)(pgdir[diridx] & ADDR_PGENT_MASK);
+		}
 	}
 
 	pgtbl[pgidx] = PAGE_TO_ADDR(ppage) | (attr & ATTR_PGTBL_MASK) | PG_PRESENT;
 	flush_tlb_page(vpage);
 
-	if(pgon) {
-		enable_paging();
-	}
 	return 0;
 }
 
