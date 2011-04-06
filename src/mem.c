@@ -3,6 +3,7 @@
 #include "mem.h"
 #include "panic.h"
 #include "vm.h"
+#include "intr.h"
 
 #define FREE		0
 #define USED		1
@@ -120,7 +121,10 @@ void init_mem(struct mboot_info *mb)
  */
 uint32_t alloc_phys_page(void)
 {
-	int i, idx, max;
+	int i, idx, max, intr_state;
+
+	intr_state = get_intr_state();
+	disable_intr();
 
 	idx = last_alloc_idx;
 	max = bmsize / 4;
@@ -139,6 +143,8 @@ uint32_t alloc_phys_page(void)
 					last_alloc_idx = idx;
 
 					printf("alloc_phys_page() -> %x (page: %d)\n", PAGE_TO_ADDR(pg), pg);
+
+					set_intr_state(intr_state);
 					return PAGE_TO_ADDR(pg);
 				}
 			}
@@ -147,6 +153,7 @@ uint32_t alloc_phys_page(void)
 		idx++;
 	}
 
+	set_intr_state(intr_state);
 	return 0;
 }
 
@@ -163,6 +170,9 @@ void free_phys_page(uint32_t addr)
 	int pg = ADDR_TO_PAGE(addr);
 	int bmidx = BM_IDX(pg);
 
+	int intr_state = get_intr_state();
+	disable_intr();
+
 	if(!IS_FREE(pg)) {
 		panic("free_phys_page(%d): I thought that was already free!\n", pg);
 	}
@@ -171,6 +181,8 @@ void free_phys_page(uint32_t addr)
 	if(bmidx < last_alloc_idx) {
 		last_alloc_idx = bmidx;
 	}
+
+	set_intr_state(intr_state);
 }
 
 /* this is only ever used by the VM init code to find out what the extends of

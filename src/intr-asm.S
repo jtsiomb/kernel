@@ -17,6 +17,28 @@ set_idt:
 	lidt (lim)
 	ret
 
+/* get_intr_state()
+ * returns 1 if interrutps are enabled, 0 if disabled */
+	.globl get_intr_state
+get_intr_state:
+	pushf
+	popl %eax
+	shr $9, %eax  /* bit 9 of eflags is IF */
+	andl $1, %eax
+	ret
+
+/* set_intr_state(int state)
+ * enables interrupts if the argument is non-zero, disables them otherwise */
+	.globl set_intr_state
+set_intr_state:
+	cmpl $0, 4(%esp)
+	jz 0f
+	sti
+	ret
+0:	cli
+	ret
+
+
 /* interrupt entry with error code macro
  * this macro generates an interrupt entry point for the
  * exceptions which include error codes in the stack frame

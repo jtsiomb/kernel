@@ -97,13 +97,17 @@ void init_vm(struct mboot_info *mb)
 int map_page(int vpage, int ppage, unsigned int attr)
 {
 	uint32_t *pgtbl;
-	int diridx, pgidx, pgon;
+	int diridx, pgidx, pgon, intr_state;
+
+	intr_state = get_intr_state();
+	disable_intr();
 
 	pgon = get_paging_status();
 
 	if(ppage < 0) {
 		uint32_t addr = alloc_phys_page();
 		if(!addr) {
+			set_intr_state(intr_state);
 			return -1;
 		}
 		ppage = ADDR_TO_PAGE(addr);
@@ -129,6 +133,7 @@ int map_page(int vpage, int ppage, unsigned int attr)
 	pgtbl[pgidx] = PAGE_TO_ADDR(ppage) | (attr & ATTR_PGTBL_MASK) | PG_PRESENT;
 	flush_tlb_page(vpage);
 
+	set_intr_state(intr_state);
 	return 0;
 }
 
@@ -137,6 +142,9 @@ void unmap_page(int vpage)
 	uint32_t *pgtbl;
 	int diridx = PAGE_TO_PGTBL(vpage);
 	int pgidx = PAGE_TO_PGTBL_PG(vpage);
+
+	int intr_state = get_intr_state();
+	disable_intr();
 
 	if(!(pgdir[diridx] & PG_PRESENT)) {
 		goto err;
@@ -149,9 +157,11 @@ void unmap_page(int vpage)
 	pgtbl[pgidx] = 0;
 	flush_tlb_page(vpage);
 
-	return;
+	if(0) {
 err:
-	printf("unmap_page(%d): page already not mapped\n", vpage);
+		printf("unmap_page(%d): page already not mapped\n", vpage);
+	}
+	set_intr_state(intr_state);
 }
 
 /* if ppg_start is -1, we allocate physical pages to map with alloc_phys_page() */
@@ -217,8 +227,11 @@ uint32_t virt_to_phys(uint32_t vaddr)
  */
 int pgalloc(int num, int area)
 {
-	int ret = -1;
+	int intr_state, ret = -1;
 	struct page_range *node, *prev, dummy;
+
+	intr_state = get_intr_state();
+	disable_intr();
 
 	dummy.next = pglist[area];
 	node = pglist[area];
@@ -252,13 +265,17 @@ int pgalloc(int num, int area)
 		}
 	}
 
+	set_intr_state(intr_state);
 	return ret;
 }
 
 void pgfree(int start, int num)
 {
-	int area, end;
+	int area, end, intr_state;
 	struct page_range *node, *new, *prev, *next;
+
+	intr_state = get_intr_state();
+	disable_intr();
 
 	if(!(new = alloc_node())) {
 		panic("pgfree: can't allocate new page_range node to add the freed pages\n");
@@ -295,6 +312,7 @@ void pgfree(int start, int num)
 	}
 
 	coalesce(prev, new, next);
+	set_intr_state(intr_state);
 }
 
 static void coalesce(struct page_range *low, struct page_range *mid, struct page_range *high)
@@ -382,8 +400,14 @@ static void free_node(struct page_range *node)
 
 void dbg_print_vm(int area)
 {
-	struct page_range *node = pglist[area];
-	int last = area == MEM_USER ? 0 : ADDR_TO_PAGE(KMEM_START);
+	struct page_range *node;
+	int last, intr_state;
+
+	intr_state = get_intr_state();
+	disable_intr();
+
+	node = pglist[area];
+	last = area == MEM_USER ? 0 : ADDR_TO_PAGE(KMEM_START);
 
 	printf("%s vm space\n", area == MEM_USER ? "user" : "kernel");
 
@@ -402,4 +426,6 @@ void dbg_print_vm(int area)
 		last = node->end;
 		node = node->next;
 	}
+
+	set_intr_state(intr_state);
 }
