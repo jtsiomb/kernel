@@ -1,6 +1,6 @@
 	.text
 /* enable_paging(void)
- * sets the cr0 bit 31 which enables page translation */
+ * sets bit 31 of cr0 which enables page translation */
 	.globl enable_paging
 enable_paging:
 	movl %cr0, %eax
@@ -9,7 +9,7 @@ enable_paging:
 	ret
 
 /* disable_paging(void)
- * clears the cr0 bit 31 */
+ * clears bit 31 of cr0 which disables page translation */
 	.globl disable_paging
 disable_paging:
 	movl %cr0, %eax
@@ -17,6 +17,8 @@ disable_paging:
 	movl %eax, %cr0
 	ret
 
+/* get_paging_status(void)
+ * returns 0 if paging is disabled or 1 if it's enabled */
 	.globl get_paging_status
 get_paging_status:
 	movl %cr0, %eax

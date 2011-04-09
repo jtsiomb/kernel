@@ -57,7 +57,10 @@ void kmain(struct mboot_info *mbinf)
 	/* silence the blasted timer interrupt */
 	interrupt(32, do_nothing);
 
-	init_vm(mbinf);
+	/* initialize the physical memory manager */
+	init_mem(mbinf);
+	/* initialize paging and the virtual memory manager */
+	init_vm();
 
 	dbg_print_vm(MEM_USER);
 	dbg_print_vm(MEM_KERNEL);
