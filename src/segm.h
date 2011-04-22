@@ -3,6 +3,9 @@
 
 #define SEGM_KCODE	1
 #define SEGM_KDATA	2
+#define SEGM_UCODE	3
+#define SEGM_UDATA	4
+#define SEGM_TASK	5
 
 void init_segm(void);
 
