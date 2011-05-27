@@ -53,12 +53,9 @@ static struct page_range *node_pool;
 static struct page_range first_node;
 
 
-void init_vm(struct mboot_info *mb)
+void init_vm(void)
 {
 	uint32_t idmap_end;
-
-	/* initialize the physical memory map and allocator */
-	init_mem(mb);
 
 	/* setup the page tables */
 	pgdir = (uint32_t*)alloc_phys_page();
@@ -83,12 +80,12 @@ void init_vm(struct mboot_info *mb)
 	node_pool = 0;
 
 	first_node.start = ADDR_TO_PAGE(KMEM_START);
-	first_node.end = PAGE_COUNT;
+	first_node.end = ADDR_TO_PAGE(PGTBL_BASE);
 	first_node.next = 0;
 	pglist[MEM_KERNEL] = &first_node;
 
 	pglist[MEM_USER] = alloc_node();
-	pglist[MEM_USER]->start = 0;
+	pglist[MEM_USER]->start = ADDR_TO_PAGE(idmap_end);
 	pglist[MEM_USER]->end = ADDR_TO_PAGE(KMEM_START);
 	pglist[MEM_USER]->next = 0;
 }
@@ -149,7 +146,7 @@ void unmap_page(int vpage)
 	if(!(pgdir[diridx] & PG_PRESENT)) {
 		goto err;
 	}
-	pgtbl = (uint32_t*)(pgdir[diridx] & ADDR_PGENT_MASK);
+	pgtbl = PGTBL(diridx);
 
 	if(!(pgtbl[pgidx] & PG_PRESENT)) {
 		goto err;
@@ -168,18 +165,9 @@ err:
 int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr)
 {
 	int i, phys_pg;
-	uint32_t paddr;
 
 	for(i=0; i<pgcount; i++) {
-		if(ppg_start < 0) {
-			if(!(paddr = alloc_phys_page())) {
-				return -1;
-			}
-			phys_pg = ADDR_TO_PAGE(paddr);
-		} else {
-			phys_pg = ppg_start + i;
-		}
-
+		phys_pg = ppg_start < 0 ? -1 : ppg_start + i;
 		map_page(vpg_start + i, phys_pg, attr);
 	}
 	return 0;
@@ -212,7 +200,7 @@ uint32_t virt_to_phys(uint32_t vaddr)
 	if(!(pgdir[diridx] & PG_PRESENT)) {
 		panic("virt_to_phys(%x): page table %d not present\n", vaddr, diridx);
 	}
-	pgtbl = (uint32_t*)(pgdir[diridx] & PGENT_ADDR_MASK);
+	pgtbl = PGTBL(diridx);
 
 	if(!(pgtbl[pgidx] & PG_PRESENT)) {
 		panic("virt_to_phys(%x): page %d not present\n", vaddr, ADDR_TO_PAGE(vaddr));
@@ -271,11 +259,18 @@ int pgalloc(int num, int area)
 
 void pgfree(int start, int num)
 {
-	int area, end, intr_state;
+	int i, area, end, intr_state;
 	struct page_range *node, *new, *prev, *next;
 
 	intr_state = get_intr_state();
 	disable_intr();
+
+	for(i=0; i<num; i++) {
+		uint32_t phys = virt_to_phys(PAGE_TO_ADDR(start + i));
+		if(phys) {
+			free_phys_page(ADDR_TO_PAGE(phys));
+		}
+	}
 
 	if(!(new = alloc_node())) {
 		panic("pgfree: can't allocate new page_range node to add the freed pages\n");

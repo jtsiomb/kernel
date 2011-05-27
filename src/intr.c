@@ -95,9 +95,6 @@ void init_intr(void)
 	 * setting up the maping of IRQs [0, 15] to interrupts [32, 47]
 	 */
 	init_pic(IRQ_OFFSET);
-
-	/* we're done setting up, enable interrupts before returning */
-	enable_intr();
 }
 
 /* set an interrupt handler function for a particular interrupt */

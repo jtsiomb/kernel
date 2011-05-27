@@ -35,7 +35,7 @@
 #define PAGE_TO_PGTBL_PG(x)		((uint32_t)(x) & 0x3ff)
 
 
-void init_vm(struct mboot_info *mb);
+void init_vm(void);
 
 int map_page(int vpage, int ppage, unsigned int attr);
 int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr);
