@@ -90,7 +90,7 @@ find_range:
 
 		range = alloc_node();
 		range->start = PAGE_TO_ADDR(pg);
-		range->size = pg * PGSIZE;
+		range->size = pgcount * PGSIZE;
 		add_range(range);
 		goto find_range;
 	}
