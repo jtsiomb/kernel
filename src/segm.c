@@ -11,6 +11,8 @@
 #define BIT_CODE		(1 << 11)
 #define BIT_NOSYS		(1 << 12)
 #define BIT_PRESENT		(1 << 15)
+/* TSS busy bit */
+#define BIT_BUSY		(1 << 9)
 
 /* bits for the last 16bit part of the descriptor */
 #define BIT_BIG			(1 << 6)
@@ -19,7 +21,11 @@
 
 enum {TYPE_DATA, TYPE_CODE};
 
+#define TSS_TYPE_BITS	0x900
+#define TSS_BUSY		BIT_BUSY
+
 static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type);
+static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, unsigned int busy);
 
 /* these functions are implemented in segm-asm.S */
 void setup_selectors(uint16_t code, uint16_t data);
@@ -27,7 +33,7 @@ void set_gdt(uint32_t addr, uint16_t limit);
 
 
 /* our global descriptor table */
-static desc_t gdt[3];
+static desc_t gdt[6];
 
 
 void init_segm(void)
@@ -35,6 +41,9 @@ void init_segm(void)
 	memset(gdt, 0, sizeof gdt);
 	segm_desc(gdt + SEGM_KCODE, 0, 0xffffffff, 0, TYPE_CODE);
 	segm_desc(gdt + SEGM_KDATA, 0, 0xffffffff, 0, TYPE_DATA);
+	segm_desc(gdt + SEGM_UCODE, 0, 0xffffffff, 3, TYPE_CODE);
+	segm_desc(gdt + SEGM_UDATA, 0, 0xffffffff, 3, TYPE_DATA);
+	/*task_desc(gdt + SEGM_TASK, 0, 0xffffffff, 3, TSS_BUSY);*/
 
 	set_gdt((uint32_t)gdt, sizeof gdt - 1);
 
@@ -63,4 +72,14 @@ static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int 
 	 * base, and the granularity and deafult/big flags in bits 23 and 22 resp.
 	 */
 	desc->d[3] = ((limit >> 16) & 0xf) | ((base >> 16) & 0xff00) | BIT_GRAN | BIT_BIG;
+}
+
+static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, unsigned int busy)
+{
+	desc->d[0] = limit & 0xffff;
+	desc->d[1] = base & 0xffff;
+
+	desc->d[2] = ((base >> 16) & 0xff) | ((dpl & 3) << 13) | BIT_PRESENT |
+		TSS_TYPE_BITS | busy;
+	desc->d[3] = ((limit >> 16) & 0xf) | ((base >> 16) & 0xff00) | BIT_GRAN;
 }
