@@ -5,10 +5,9 @@
 #include "asmops.h"
 #include "segm.h"
 #include "intr.h"
+#include "timer.h"
 #include "mem.h"
 #include "vm.h"
-
-static void do_nothing();
 
 /* special keys */
 enum {
@@ -55,8 +54,7 @@ void kmain(struct mboot_info *mbinf)
 	init_segm();
 	init_intr();
 
-	/* silence the blasted timer interrupt */
-	interrupt(32, do_nothing);
+	init_timer();
 
 	/* initialize the physical memory manager */
 	init_mem(mbinf);
@@ -65,27 +63,6 @@ void kmain(struct mboot_info *mbinf)
 
 	/* initialization complete, enable interrupts */
 	enable_intr();
-
-	dbg_print_vm(MEM_USER);
-	dbg_print_vm(MEM_KERNEL);
-
-	{
-		void *foo, *bar, *xyzzy, *koko, *lala;
-
-		foo = malloc(128);
-		bar = malloc(32 * 1024);
-		xyzzy = malloc(8000);
-
-		free(bar);
-
-		koko = malloc(700);
-		lala = malloc(6 * 1024 * 1024);
-
-		free(xyzzy);
-		free(foo);
-		free(koko);
-		free(lala);
-	}
 
 	for(;;) {
 		char c, keypress;
@@ -97,8 +74,4 @@ void kmain(struct mboot_info *mbinf)
 			putchar(keycodes[(int)c]);
 		}
 	}
-}
-
-static void do_nothing()
-{
 }

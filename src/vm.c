@@ -259,7 +259,7 @@ int pgalloc(int num, int area)
 
 void pgfree(int start, int num)
 {
-	int i, area, end, intr_state;
+	int i, area, intr_state;
 	struct page_range *node, *new, *prev, *next;
 
 	intr_state = get_intr_state();
@@ -276,7 +276,7 @@ void pgfree(int start, int num)
 		panic("pgfree: can't allocate new page_range node to add the freed pages\n");
 	}
 	new->start = start;
-	end = new->end = start + num;
+	new->end = start + num;
 
 	area = PAGE_TO_ADDR(start) >= KMEM_START ? MEM_KERNEL : MEM_USER;
 
