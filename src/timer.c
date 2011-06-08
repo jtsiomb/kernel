@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "intr.h"
 #include "asmops.h"
+#include "timer.h"
 #include "config.h"
 
 /* frequency of the oscillator driving the 8254 timer */
@@ -39,24 +40,22 @@
 
 static void intr_handler();
 
-static unsigned long nticks;
-
 
 void init_timer(void)
 {
-	/* calculate the reset count: round(osc / freq) */
-	int reset_count = DIV_ROUND(OSC_FREQ_HZ, TICK_FREQ_HZ);
+	/* calculate the reload count: round(osc / freq) */
+	int reload_count = DIV_ROUND(OSC_FREQ_HZ, TICK_FREQ_HZ);
 
 	/* set the mode to square wave for channel 0, both low
-	 * and high reset count bytes will follow...
+	 * and high reload count bytes will follow...
 	 */
 	outb(CMD_CHAN0 | CMD_ACCESS_BOTH | CMD_OP_SQWAVE, PORT_CMD);
 
-	/* write the low and high bytes of the reset count to the
+	/* write the low and high bytes of the reload count to the
 	 * port for channel 0
 	 */
-	outb(reset_count & 0xff, PORT_DATA0);
-	outb((reset_count >> 8) & 0xff, PORT_DATA0);
+	outb(reload_count & 0xff, PORT_DATA0);
+	outb((reload_count >> 8) & 0xff, PORT_DATA0);
 
 	nticks = 0;
 
