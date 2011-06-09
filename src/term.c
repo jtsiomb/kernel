@@ -29,7 +29,6 @@ int set_back_color(int c)
 
 /* output a single character, handles formatting, cursor advancement
  * and scrolling the screen when we reach the bottom.
- * TODO make visible cursor actually move.
  */
 int putchar(int c)
 {

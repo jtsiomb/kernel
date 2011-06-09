@@ -57,10 +57,8 @@ void init_timer(void)
 	outb(reload_count & 0xff, PORT_DATA0);
 	outb((reload_count >> 8) & 0xff, PORT_DATA0);
 
-	nticks = 0;
-
 	/* set the timer interrupt handler */
-	interrupt(32, intr_handler);
+	interrupt(IRQ_TO_INTR(0), intr_handler);
 }
 
 /* This will be called by the interrupt dispatcher approximately
