@@ -5,6 +5,7 @@
 #include "asmops.h"
 #include "segm.h"
 #include "intr.h"
+#include "rtc.h"
 #include "timer.h"
 #include "mem.h"
 #include "vm.h"
@@ -54,6 +55,7 @@ void kmain(struct mboot_info *mbinf)
 	init_segm();
 	init_intr();
 
+	init_rtc();
 	init_timer();
 
 	/* initialize the physical memory manager */
