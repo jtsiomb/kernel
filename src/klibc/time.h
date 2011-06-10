@@ -15,8 +15,13 @@ struct tm {
 	int tm_isdst;
 };
 
+time_t time(time_t *tp);
 char *asctime(struct tm *tm);
+char *asctime_r(struct tm *tm, char *buf);
+
 time_t mktime(struct tm *tm);
+struct tm *gmtime(time_t *tp);
+struct tm *gmtime_r(time_t *tp, struct tm *tm);
 
 /* non-standard helpers */
 int day_of_year(int year, int mon, int day);

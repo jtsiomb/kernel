@@ -1,12 +1,20 @@
 #include <stdio.h>
 #include "time.h"
+#include "rtc.h"
+#include "timer.h"
+#include "config.h"
 
 #define MINSEC		60
 #define HOURSEC		(60 * MINSEC)
 #define DAYSEC		(24 * HOURSEC)
+#define YEARDAYS(x)	(is_leap_year(x) ? 366 : 365)
 
 static int is_leap_year(int yr);
 
+static int mdays[2][12] = {
+	{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+	{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+};
 
 static char *wday[] = {
 	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
@@ -17,10 +25,22 @@ static char *mon[] = {
 };
 
 
+time_t time(time_t *tp)
+{
+	time_t res = start_time + nticks / TICK_FREQ_HZ;
+
+	if(tp) *tp = res;
+	return res;
+}
+
 char *asctime(struct tm *tm)
 {
 	static char buf[64];
+	return asctime_r(tm, buf);
+}
 
+char *asctime_r(struct tm *tm, char *buf)
+{
 	sprintf(buf, "%s %s %d %02d:%02d:%02d %d\n", wday[tm->tm_wday],
 			mon[tm->tm_mon], tm->tm_mday, tm->tm_hour, tm->tm_min,
 			tm->tm_sec, tm->tm_year + 1900);
@@ -34,24 +54,64 @@ time_t mktime(struct tm *tm)
 	int days = day_of_year(tm->tm_year + 1900, tm->tm_mon, tm->tm_mday - 1);
 
 	for(i=0; i<num_years; i++) {
-		days += is_leap_year(year++) ? 366 : 365;
+		days += YEARDAYS(year++);
 	}
 
 	return (time_t)days * DAYSEC + tm->tm_hour * HOURSEC +
 		tm->tm_min * MINSEC + tm->tm_sec;
 }
 
+struct tm *gmtime(time_t *tp)
+{
+	static struct tm tm;
+	return gmtime_r(tp, &tm);
+}
+
+struct tm *gmtime_r(time_t *tp, struct tm *tm)
+{
+	int yrsec, yrdays, monsec, leap, day, num_days = 0;
+	int year = 1970;
+	time_t t = *tp;
+
+	while(t >= (yrsec = (yrdays = YEARDAYS(year)) * DAYSEC)) {
+		t -= yrsec;
+		year++;
+		num_days += yrdays;
+	}
+	tm->tm_year = year - 1900;
+
+	leap = is_leap_year(year);
+	tm->tm_mon = 0;
+	while(t >= (monsec = mdays[leap][tm->tm_mon] * DAYSEC)) {
+		num_days += mdays[leap][tm->tm_mon++];
+		t -= monsec;
+	}
+
+	day = t / DAYSEC;
+	tm->tm_mday = day + 1;
+	t %= DAYSEC;
+
+	tm->tm_hour = t / HOURSEC;
+	t %= HOURSEC;
+
+	tm->tm_min = t / MINSEC;
+	tm->tm_sec = t % MINSEC;
+
+	num_days += day;
+	tm->tm_wday = (num_days + 4) % 7;
+	tm->tm_yday = day_of_year(year, tm->tm_mon, day);
+	return tm;
+}
+
 int day_of_year(int year, int mon, int day)
 {
-	static int commdays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-	static int leapdays[] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-	int *mdays, i, yday;
+	int i, yday, leap;
 
-	mdays = is_leap_year(year) ? leapdays : commdays;
-
+	leap = is_leap_year(year) ? 1 : 0;
 	yday = day;
+
 	for(i=0; i<mon; i++) {
-		yday += mdays[i];
+		yday += mdays[leap][i];
 	}
 	return yday;
 }

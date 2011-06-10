@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <asmops.h>
+#include "rtc.h"
 
 /* CMOS I/O ports */
 #define PORT_CTL	0x70
@@ -33,17 +34,17 @@
 static void read_rtc(struct tm *tm);
 static int read_reg(int reg);
 
-static unsigned long start_time;
-
 
 void init_rtc(void)
 {
 	struct tm tm;
 
 	read_rtc(&tm);
+	start_time = mktime(&tm);
+
 	printf("System real-time clock: %s", asctime(&tm));
-	printf("time_t: %ld\n", mktime(&tm));
 }
+
 
 static void read_rtc(struct tm *tm)
 {

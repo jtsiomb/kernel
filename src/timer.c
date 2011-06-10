@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include "intr.h"
 #include "asmops.h"
 #include "timer.h"
@@ -70,6 +71,9 @@ static void intr_handler()
 	nticks++;
 
 	if(nticks % TICK_FREQ_HZ == 0) {
-		printf("%lu sec\n", nticks / TICK_FREQ_HZ);
+		/*printf("%lu sec\n", nticks / TICK_FREQ_HZ);*/
+		time_t t = time(0);
+
+		printf("%s", asctime(gmtime(&t)));
 	}
 }
