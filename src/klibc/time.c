@@ -69,37 +69,35 @@ struct tm *gmtime(time_t *tp)
 
 struct tm *gmtime_r(time_t *tp, struct tm *tm)
 {
-	int yrsec, yrdays, monsec, leap, day, num_days = 0;
-	int year = 1970;
-	time_t t = *tp;
+	int year, days, leap, yrdays;
+	time_t t;
 
-	while(t >= (yrsec = (yrdays = YEARDAYS(year)) * DAYSEC)) {
-		t -= yrsec;
+	year = 1970;
+	days = *tp / DAYSEC;
+	t = *tp % DAYSEC;
+
+	tm->tm_wday = (days + 4) % 7;
+
+	while(days >= (yrdays = YEARDAYS(year))) {
+		days -= yrdays;
 		year++;
-		num_days += yrdays;
 	}
 	tm->tm_year = year - 1900;
 
 	leap = is_leap_year(year);
 	tm->tm_mon = 0;
-	while(t >= (monsec = mdays[leap][tm->tm_mon] * DAYSEC)) {
-		num_days += mdays[leap][tm->tm_mon++];
-		t -= monsec;
+	while(days >= mdays[leap][tm->tm_mon]) {
+		days -= mdays[leap][tm->tm_mon++];
 	}
 
-	day = t / DAYSEC;
-	tm->tm_mday = day + 1;
-	t %= DAYSEC;
+	tm->tm_mday = days + 1;
 
 	tm->tm_hour = t / HOURSEC;
 	t %= HOURSEC;
-
 	tm->tm_min = t / MINSEC;
 	tm->tm_sec = t % MINSEC;
 
-	num_days += day;
-	tm->tm_wday = (num_days + 4) % 7;
-	tm->tm_yday = day_of_year(year, tm->tm_mon, day);
+	tm->tm_yday = day_of_year(year, tm->tm_mon, days);
 	return tm;
 }
 
