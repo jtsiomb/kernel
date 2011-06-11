@@ -83,6 +83,7 @@ struct tm *gmtime_r(time_t *tp, struct tm *tm)
 		year++;
 	}
 	tm->tm_year = year - 1900;
+	tm->tm_yday = days;
 
 	leap = is_leap_year(year);
 	tm->tm_mon = 0;
@@ -96,8 +97,6 @@ struct tm *gmtime_r(time_t *tp, struct tm *tm)
 	t %= HOURSEC;
 	tm->tm_min = t / MINSEC;
 	tm->tm_sec = t % MINSEC;
-
-	tm->tm_yday = day_of_year(year, tm->tm_mon, days);
 	return tm;
 }
 
