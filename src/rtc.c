@@ -59,7 +59,6 @@ static void read_rtc(struct tm *tm)
 	tm->tm_mday = read_reg(REG_DAY);
 	tm->tm_mon = read_reg(REG_MONTH);
 	tm->tm_year = read_reg(REG_YEAR);
-	tm->tm_wday = read_reg(REG_WEEKDAY);
 
 	/* in 12hour mode, bit 7 means post-meridiem */
 	pm = tm->tm_hour & HOUR_PM_BIT;
@@ -74,7 +73,6 @@ static void read_rtc(struct tm *tm)
 		tm->tm_mday = BCD_TO_BIN(tm->tm_mday);
 		tm->tm_mon = BCD_TO_BIN(tm->tm_mon);
 		tm->tm_year = BCD_TO_BIN(tm->tm_year);
-		tm->tm_wday = BCD_TO_BIN(tm->tm_wday);
 	}
 
 	/* make the year an offset from 1900 */
@@ -95,8 +93,6 @@ static void read_rtc(struct tm *tm)
 	}
 
 	tm->tm_mon -= 1;	/* we want months to start from 0 */
-	tm->tm_wday -= 1;	/* we want weekdays to start from 0 */
-	tm->tm_yday = day_of_year(tm->tm_year + 1900, tm->tm_mon, tm->tm_mday - 1);
 }
 
 static int read_reg(int reg)

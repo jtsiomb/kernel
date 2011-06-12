@@ -55,13 +55,14 @@ void kmain(struct mboot_info *mbinf)
 	init_segm();
 	init_intr();
 
-	init_rtc();
-	init_timer();
-
 	/* initialize the physical memory manager */
 	init_mem(mbinf);
 	/* initialize paging and the virtual memory manager */
 	init_vm();
+
+	/* initialize the timer and RTC */
+	init_timer();
+	init_rtc();
 
 	/* initialization complete, enable interrupts */
 	enable_intr();

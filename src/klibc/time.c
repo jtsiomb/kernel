@@ -9,6 +9,9 @@
 #define DAYSEC		(24 * HOURSEC)
 #define YEARDAYS(x)	(is_leap_year(x) ? 366 : 365)
 
+/* 1-1-1970 was a thursday */
+#define EPOCH_WDAY	4
+
 static int is_leap_year(int yr);
 
 static int mdays[2][12] = {
@@ -53,9 +56,15 @@ time_t mktime(struct tm *tm)
 	int year = 1970;
 	int days = day_of_year(tm->tm_year + 1900, tm->tm_mon, tm->tm_mday - 1);
 
+	/* set correct yearday */
+	tm->tm_yday = days;
+
 	for(i=0; i<num_years; i++) {
 		days += YEARDAYS(year++);
 	}
+
+	/* set wday correctly */
+	tm->tm_wday = (days + EPOCH_WDAY) % 7;
 
 	return (time_t)days * DAYSEC + tm->tm_hour * HOURSEC +
 		tm->tm_min * MINSEC + tm->tm_sec;
@@ -76,7 +85,7 @@ struct tm *gmtime_r(time_t *tp, struct tm *tm)
 	days = *tp / DAYSEC;
 	t = *tp % DAYSEC;
 
-	tm->tm_wday = (days + 4) % 7;
+	tm->tm_wday = (days + EPOCH_WDAY) % 7;
 
 	while(days >= (yrdays = YEARDAYS(year))) {
 		days -= yrdays;
