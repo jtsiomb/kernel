@@ -5,6 +5,8 @@
 #include "asmops.h"
 #include "segm.h"
 #include "intr.h"
+#include "rtc.h"
+#include "timer.h"
 #include "mem.h"
 #include "vm.h"
 
@@ -55,13 +57,15 @@ void kmain(struct mboot_info *mbinf)
 	init_segm();
 	init_intr();
 
-	/* silence the blasted timer interrupt */
-	interrupt(32, do_nothing);
 
 	/* initialize the physical memory manager */
 	init_mem(mbinf);
 	/* initialize paging and the virtual memory manager */
 	init_vm();
+
+	/* initialize the timer and RTC */
+	init_timer();
+	init_rtc();
 
 	/* initialization complete, enable interrupts */
 	enable_intr();
@@ -77,8 +81,4 @@ void kmain(struct mboot_info *mbinf)
 			putchar(keycodes[(int)c]);
 		}
 	}
-}
-
-static void do_nothing()
-{
 }

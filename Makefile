@@ -23,6 +23,9 @@ bin = kernel.elf
 $(bin): $(obj)
 	ld -melf_i386 -o $@ -Ttext 0x100000 -e kentry $(obj) -Map link.map
 
+%.s: %.c
+	$(CC) $(CFLAGS) -S -o $@ $<
+
 -include $(dep)
 
 %.d: %.c

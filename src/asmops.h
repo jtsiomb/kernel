@@ -32,4 +32,6 @@
 	"outl %0, %1\n\t" \
 	:: "a" ((unsigned long)(src)), "dN" ((unsigned short)(port)))
 
+#define iodelay() outb(0, 0x80)
+
 #endif	/* ASMOPS_H_ */
