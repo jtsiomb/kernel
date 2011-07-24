@@ -40,12 +40,13 @@
  */
 struct intr_frame {
 	/* registers pushed by pusha in intr_entry_* */
-	uint32_t edi, esi, ebp, esp;
-	uint32_t ebx, edx, ecx, eax;
+	struct registers regs;
 	/* interrupt number and error code pushed in intr_entry_* */
 	uint32_t inum, err;
 	/* pushed by CPU during interrupt entry */
 	uint32_t eip, cs, eflags;
+	/* pushed by CPU during interrupt entry from user space */
+	uint32_t esp, ss;
 };
 
 

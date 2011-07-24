@@ -1,6 +1,12 @@
 #ifndef ASMOPS_H_
 #define ASMOPS_H_
 
+/* general purpose registers as they are pushed by pusha */
+struct registers {
+	uint32_t edi, esi, ebp, esp;
+	uint32_t ebx, edx, ecx, eax;
+} __attribute__ ((packed));
+
 #define enable_intr() asm volatile("sti")
 #define disable_intr() asm volatile("cli")
 #define halt_cpu() asm volatile("hlt")
