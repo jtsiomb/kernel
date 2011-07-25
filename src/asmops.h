@@ -1,6 +1,8 @@
 #ifndef ASMOPS_H_
 #define ASMOPS_H_
 
+#include <inttypes.h>
+
 /* general purpose registers as they are pushed by pusha */
 struct registers {
 	uint32_t edi, esi, ebp, esp;

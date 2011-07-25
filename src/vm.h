@@ -38,9 +38,12 @@
 void init_vm(void);
 
 int map_page(int vpage, int ppage, unsigned int attr);
+int unmap_page(int vpage);
 int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr);
+int unmap_page_range(int vpg_start, int pgcount);
 int map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr);
 
+int virt_to_phys_page(int vpg);
 uint32_t virt_to_phys(uint32_t vaddr);
 
 enum {
@@ -50,6 +53,8 @@ enum {
 
 int pgalloc(int num, int area);
 void pgfree(int start, int num);
+
+uint32_t clone_vmem(void);
 
 void dbg_print_vm(int area);
 

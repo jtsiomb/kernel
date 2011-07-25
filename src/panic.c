@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include "asmops.h"
 
-struct registers {
+struct all_registers {
 	uint32_t eax, ebx, ecx, edx;
 	uint32_t esp, ebp, esi, edi;
 	uint32_t eflags;
@@ -12,12 +12,12 @@ struct registers {
 };
 
 /* defined in regs.S */
-void get_regs(struct registers *regs);
+void get_regs(struct all_registers *regs);
 
 void panic(const char *fmt, ...)
 {
 	va_list ap;
-	struct registers regs;
+	struct all_registers regs;
 
 	disable_intr();
 

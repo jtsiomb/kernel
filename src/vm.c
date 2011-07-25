@@ -134,9 +134,10 @@ int map_page(int vpage, int ppage, unsigned int attr)
 	return 0;
 }
 
-void unmap_page(int vpage)
+int unmap_page(int vpage)
 {
 	uint32_t *pgtbl;
+	int res = 0;
 	int diridx = PAGE_TO_PGTBL(vpage);
 	int pgidx = PAGE_TO_PGTBL_PG(vpage);
 
@@ -157,8 +158,10 @@ void unmap_page(int vpage)
 	if(0) {
 err:
 		printf("unmap_page(%d): page already not mapped\n", vpage);
+		res = -1;
 	}
 	set_intr_state(intr_state);
+	return res;
 }
 
 /* if ppg_start is -1, we allocate physical pages to map with alloc_phys_page() */
@@ -171,6 +174,18 @@ int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr)
 		map_page(vpg_start + i, phys_pg, attr);
 	}
 	return 0;
+}
+
+int unmap_page_range(int vpg_start, int pgcount)
+{
+	int i, res = 0;
+
+	for(i=0; i<pgcount; i++) {
+		if(unmap_page(vpg_start + i) == -1) {
+			res = -1;
+		}
+	}
+	return res;
 }
 
 /* if paddr is 0, we allocate physical pages with alloc_phys_page() */
@@ -193,21 +208,39 @@ int map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr)
 
 uint32_t virt_to_phys(uint32_t vaddr)
 {
+	int pg;
+	uint32_t pgaddr;
+
+	if((pg = virt_to_phys_page(ADDR_TO_PAGE(vaddr))) == -1) {
+		return 0;
+	}
+	pgaddr = PAGE_TO_ADDR(pg);
+
+	return pgaddr | ADDR_TO_PGOFFS(vaddr);
+}
+
+int virt_to_phys_page(int vpg)
+{
 	uint32_t pgaddr, *pgtbl;
-	int diridx = ADDR_TO_PGTBL(vaddr);
-	int pgidx = ADDR_TO_PGTBL_PG(vaddr);
+	int diridx, pgidx;
+
+	if(vpg < 0 || vpg >= PAGE_COUNT) {
+		return -1;
+	}
+
+	diridx = PAGE_TO_PGTBL(vpg);
+	pgidx = PAGE_TO_PGTBL_PG(vpg);
 
 	if(!(pgdir[diridx] & PG_PRESENT)) {
-		panic("virt_to_phys(%x): page table %d not present\n", vaddr, diridx);
+		return -1;
 	}
 	pgtbl = PGTBL(diridx);
 
 	if(!(pgtbl[pgidx] & PG_PRESENT)) {
-		panic("virt_to_phys(%x): page %d not present\n", vaddr, ADDR_TO_PAGE(vaddr));
+		return -1;
 	}
 	pgaddr = pgtbl[pgidx] & PGENT_ADDR_MASK;
-
-	return pgaddr | ADDR_TO_PGOFFS(vaddr);
+	return ADDR_TO_PAGE(pgaddr);
 }
 
 /* allocate a contiguous block of virtual memory pages along with
@@ -266,9 +299,9 @@ void pgfree(int start, int num)
 	disable_intr();
 
 	for(i=0; i<num; i++) {
-		uint32_t phys = virt_to_phys(PAGE_TO_ADDR(start + i));
-		if(phys) {
-			free_phys_page(ADDR_TO_PAGE(phys));
+		int phys_pg = virt_to_phys_page(start + i);
+		if(phys_pg != -1) {
+			free_phys_page(phys_pg);
 		}
 	}
 
@@ -390,6 +423,60 @@ static void free_node(struct page_range *node)
 	node->next = node_pool;
 	node_pool = node;
 	printf("free_node\n");
+}
+
+
+/* clone_vmem makes a copy of the current page tables, thus duplicating
+ * the virtual address space.
+ *
+ * Returns the physical address of the new page directory.
+ */
+uint32_t clone_vmem(void)
+{
+	int i, dirpg, tblpg;
+	uint32_t paddr;
+	uint32_t *ndir, *ntbl;
+
+	if((dirpg = pgalloc(1, MEM_KERNEL)) == -1) {
+		panic("clone_vmem: failed to allocate page directory page\n");
+	}
+	ndir = (uint32_t*)PAGE_TO_ADDR(dirpg);
+
+	if((tblpg = pgalloc(1, MEM_KERNEL)) == -1) {
+		panic("clone_vmem: failed to allocate page table page\n");
+	}
+	ntbl = (uint32_t*)PAGE_TO_ADDR(tblpg);
+
+	/* we will allocate physical pages and map them to this virtual page
+	 * as needed in the loop below.
+	 */
+	free_phys_page(virt_to_phys(tblpg));
+
+	for(i=0; i<1024; i++) {
+		if(pgdir[i] & PG_PRESENT) {
+			paddr = alloc_phys_page();
+			map_page(tblpg, ADDR_TO_PAGE(paddr), 0);
+
+			/* copy the page table */
+			memcpy(ntbl, PGTBL(i), PGSIZE);
+
+			/* set the new page directory entry */
+			ndir[i] = paddr | (pgdir[i] & PGOFFS_MASK);
+		} else {
+			ndir[i] = 0;
+		}
+	}
+
+	paddr = virt_to_phys(dirpg);
+
+	/* unmap before freeing to avoid deallocating the physical pages */
+	unmap_page(dirpg);
+	unmap_page(tblpg);
+
+	pgfree(dirpg, 1);
+	pgfree(tblpg, 1);
+
+	return paddr;
 }
 
 

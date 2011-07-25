@@ -11,6 +11,7 @@ void init_proc(void)
 	/* prepare the first process */
 
 	/* create the virtual address space for this process */
+	proc[0].ctx.pgtbl_paddr = clone_vmem();
 
 	/* allocate a chunk of memory for the process image
 	 * and copy the code of test_proc there.
@@ -28,10 +29,11 @@ void init_proc(void)
 	 */
 }
 
+/*
 void save_context(struct intr_frame *ifrm)
 {
 	proc[cur_pid].ctx->regs = ifrm->regs;
 	proc[cur_pid].ctx->instr_ptr = ifrm->eip;
 	proc[cur_pid].ctx->stack_ptr = ifrm->esp;
 	proc[cur_pid].ctx->flags = ifrm->eflags;
-}
+}*/
