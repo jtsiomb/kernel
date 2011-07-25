@@ -250,6 +250,7 @@ int pgalloc(int num, int area)
 {
 	int intr_state, ret = -1;
 	struct page_range *node, *prev, dummy;
+	unsigned int attr = 0;	/* TODO */
 
 	intr_state = get_intr_state();
 	disable_intr();
@@ -281,7 +282,60 @@ int pgalloc(int num, int area)
 
 	if(ret >= 0) {
 		/* allocate physical storage and map */
-		if(map_page_range(ret, num, -1, 0) == -1) {
+		if(map_page_range(ret, num, -1, attr) == -1) {
+			ret = -1;
+		}
+	}
+
+	set_intr_state(intr_state);
+	return ret;
+}
+
+int pgalloc_vrange(int start, int num)
+{
+	struct page_range *node, *prev, dummy;
+	int area, intr_state, ret = -1;
+	unsigned int attr = 0;	/* TODO */
+
+	area = (start >= ADDR_TO_PAGE(KMEM_START)) ? MEM_KERNEL : MEM_USER;
+	if(area == KMEM_USER && start + num > ADDR_TO_PAGE(KMEM_START)) {
+		printf("pgalloc_vrange: invalid range request crossing user/kernel split\n");
+		return -1;
+	}
+
+	intr_state = get_intr_state();
+	disable_intr();
+
+	dummy.next = pglist[area];
+	node = pglist[area];
+	prev = &dummy;
+
+	/* check to see if the requested VM range is available */
+	node = pglist[area];
+	while(node) {
+		if(start >= node->start && start + num <= node->end) {
+			ret = node->start;
+			node->start += num;
+
+			if(node->start == node->end) {
+				prev->next = node->next;
+				node->next = 0;
+
+				if(node == pglist[area]) {
+					pglist[area] = 0;
+				}
+				free_node(node);
+			}
+			break;
+		}
+
+		prev = node;
+		node = node->next;
+	}
+
+	if(ret >= 0) {
+		/* allocate physical storage and map */
+		if(map_page_range(ret, num, -1, attr) == -1) {
 			ret = -1;
 		}
 	}
