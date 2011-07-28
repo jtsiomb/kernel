@@ -12,6 +12,21 @@
 /* checks whether a particular interrupt is an remapped IRQ */
 #define IS_IRQ(n)	((n) >= IRQ_OFFSET && (n) < IRQ_OFFSET + 16)
 
+/* structure used to pass the interrupt stack frame from the
+ * entry points to the C dispatch function.
+ */
+struct intr_frame {
+	/* registers pushed by pusha in intr_entry_* */
+	struct registers regs;
+	/* interrupt number and error code pushed in intr_entry_* */
+	uint32_t inum, err;
+	/* pushed by CPU during interrupt entry */
+	uint32_t eip, cs, eflags;
+	/* pushed by CPU during interrupt entry from user space */
+	uint32_t esp, ss;
+};
+
+
 
 typedef void (*intr_func_t)(int, uint32_t);
 
@@ -23,5 +38,7 @@ void interrupt(int intr_num, intr_func_t func);
 /* defined in intr-asm.S */
 int get_intr_state(void);
 void set_intr_state(int s);
+
+void intr_ret(struct intr_frame ifrm);
 
 #endif	/* INTR_H_ */

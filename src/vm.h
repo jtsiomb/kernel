@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include "mboot.h"
 
+#define KMEM_START		0xc0000000
+
 /* page mapping flags */
 #define PG_PRESENT			(1 << 0)
 #define PG_WRITABLE			(1 << 1)
@@ -52,10 +54,14 @@ enum {
 };
 
 int pgalloc(int num, int area);
+int pgalloc_vrange(int start, int num);
 void pgfree(int start, int num);
 
-uint32_t clone_vmem(void);
+uint32_t clone_vm(void);
 
 void dbg_print_vm(int area);
+
+/* defined in vm-asm.S */
+void set_pgdir_addr(uint32_t addr);
 
 #endif	/* VM_H_ */

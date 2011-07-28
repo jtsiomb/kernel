@@ -43,7 +43,7 @@ void init_segm(void)
 	segm_desc(gdt + SEGM_KDATA, 0, 0xffffffff, 0, TYPE_DATA);
 	segm_desc(gdt + SEGM_UCODE, 0, 0xffffffff, 3, TYPE_CODE);
 	segm_desc(gdt + SEGM_UDATA, 0, 0xffffffff, 3, TYPE_DATA);
-	/*task_desc(gdt + SEGM_TASK, 0, 0xffffffff, 3, TSS_BUSY);*/
+	task_desc(gdt + SEGM_TASK, 0, 0xffffffff, 3, TSS_BUSY);
 
 	set_gdt((uint32_t)gdt, sizeof gdt - 1);
 

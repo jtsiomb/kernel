@@ -8,7 +8,6 @@
 #include "panic.h"
 
 
-#define KMEM_START		0xc0000000
 #define IDMAP_START		0xa0000
 
 #define PGDIR_ADDR		0xfffff000
@@ -56,6 +55,7 @@ static struct page_range first_node;
 void init_vm(void)
 {
 	uint32_t idmap_end;
+	int i, kmem_start_pg, pgtbl_base_pg;
 
 	/* setup the page tables */
 	pgdir = (uint32_t*)alloc_phys_page();
@@ -79,15 +79,29 @@ void init_vm(void)
 	/* initialize the virtual page allocator */
 	node_pool = 0;
 
-	first_node.start = ADDR_TO_PAGE(KMEM_START);
-	first_node.end = ADDR_TO_PAGE(PGTBL_BASE);
+	kmem_start_pg = ADDR_TO_PAGE(KMEM_START);
+	pgtbl_base_pg = ADDR_TO_PAGE(PGTBL_BASE);
+
+	first_node.start = kmem_start_pg;
+	first_node.end = pgtbl_base_pg;
 	first_node.next = 0;
 	pglist[MEM_KERNEL] = &first_node;
 
 	pglist[MEM_USER] = alloc_node();
 	pglist[MEM_USER]->start = ADDR_TO_PAGE(idmap_end);
-	pglist[MEM_USER]->end = ADDR_TO_PAGE(KMEM_START);
+	pglist[MEM_USER]->end = kmem_start_pg;
 	pglist[MEM_USER]->next = 0;
+
+	/* temporaroly map something into every 1024th page of the kernel address
+	 * space to force pre-allocation of all the kernel page-tables
+	 */
+	for(i=kmem_start_pg; i<pgtbl_base_pg; i+=1024) {
+		/* if there's already something mapped here, leave it alone */
+		if(virt_to_phys_page(i) == -1) {
+			map_page(i, 0, 0);
+			unmap_page(i);
+		}
+	}
 }
 
 /* if ppage == -1 we allocate a physical page by calling alloc_phys_page */
@@ -298,7 +312,7 @@ int pgalloc_vrange(int start, int num)
 	unsigned int attr = 0;	/* TODO */
 
 	area = (start >= ADDR_TO_PAGE(KMEM_START)) ? MEM_KERNEL : MEM_USER;
-	if(area == KMEM_USER && start + num > ADDR_TO_PAGE(KMEM_START)) {
+	if(area == MEM_USER && start + num > ADDR_TO_PAGE(KMEM_START)) {
 		printf("pgalloc_vrange: invalid range request crossing user/kernel split\n");
 		return -1;
 	}
@@ -447,7 +461,7 @@ static struct page_range *alloc_node(void)
 	if(node_pool) {
 		node = node_pool;
 		node_pool = node_pool->next;
-		printf("alloc_node -> %x\n", (unsigned int)node);
+		/*printf("alloc_node -> %x\n", (unsigned int)node);*/
 		return node;
 	}
 
@@ -468,7 +482,7 @@ static struct page_range *alloc_node(void)
 
 	/* grab the first and return it */
 	node = node_pool++;
-	printf("alloc_node -> %x\n", (unsigned int)node);
+	/*printf("alloc_node -> %x\n", (unsigned int)node);*/
 	return node;
 }
 
@@ -476,26 +490,34 @@ static void free_node(struct page_range *node)
 {
 	node->next = node_pool;
 	node_pool = node;
-	printf("free_node\n");
+	/*printf("free_node\n");*/
 }
 
 
-/* clone_vmem makes a copy of the current page tables, thus duplicating
- * the virtual address space.
+/* clone_vm makes a copy of the current page tables, thus duplicating the
+ * virtual address space.
+ *
+ * For the kernel part of the address space (last 256 page directory entries)
+ * we don't want to diplicate the page tables, just point all page directory
+ * entries to the same set of page tables.
  *
  * Returns the physical address of the new page directory.
  */
-uint32_t clone_vmem(void)
+uint32_t clone_vm(void)
 {
-	int i, dirpg, tblpg;
+	int i, dirpg, tblpg, kmem_start_pg;
 	uint32_t paddr;
 	uint32_t *ndir, *ntbl;
 
+	/* allocate the new page directory */
 	if((dirpg = pgalloc(1, MEM_KERNEL)) == -1) {
 		panic("clone_vmem: failed to allocate page directory page\n");
 	}
 	ndir = (uint32_t*)PAGE_TO_ADDR(dirpg);
 
+	/* allocate a virtual page for temporarily mapping all new
+	 * page tables while we populate them.
+	 */
 	if((tblpg = pgalloc(1, MEM_KERNEL)) == -1) {
 		panic("clone_vmem: failed to allocate page table page\n");
 	}
@@ -506,7 +528,10 @@ uint32_t clone_vmem(void)
 	 */
 	free_phys_page(virt_to_phys(tblpg));
 
-	for(i=0; i<1024; i++) {
+	kmem_start_pg = ADDR_TO_PAGE(KMEM_START);
+
+	/* user space */
+	for(i=0; i<kmem_start_pg; i++) {
 		if(pgdir[i] & PG_PRESENT) {
 			paddr = alloc_phys_page();
 			map_page(tblpg, ADDR_TO_PAGE(paddr), 0);
@@ -519,6 +544,11 @@ uint32_t clone_vmem(void)
 		} else {
 			ndir[i] = 0;
 		}
+	}
+
+	/* kernel space */
+	for(i=kmem_start_pg; i<1024; i++) {
+		ndir[i] = *PGTBL(i);
 	}
 
 	paddr = virt_to_phys(dirpg);

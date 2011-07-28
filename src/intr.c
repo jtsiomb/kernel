@@ -35,21 +35,6 @@
 #define OCW2_EOI	(1 << 5)
 
 
-/* structure used to pass the interrupt stack frame from the
- * entry points to the C dispatch function.
- */
-struct intr_frame {
-	/* registers pushed by pusha in intr_entry_* */
-	struct registers regs;
-	/* interrupt number and error code pushed in intr_entry_* */
-	uint32_t inum, err;
-	/* pushed by CPU during interrupt entry */
-	uint32_t eip, cs, eflags;
-	/* pushed by CPU during interrupt entry from user space */
-	uint32_t esp, ss;
-};
-
-
 static void init_pic(int offset);
 static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int type);
 static void set_intr_entry(int num, void (*handler)(void));

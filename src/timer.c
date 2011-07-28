@@ -69,9 +69,4 @@ void init_timer(void)
 static void intr_handler()
 {
 	nticks++;
-
-	if(nticks % TICK_FREQ_HZ == 0) {
-		time_t t = time(0);
-		printf("%s", asctime(gmtime(&t)));
-	}
 }

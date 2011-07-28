@@ -9,6 +9,7 @@
 #include "timer.h"
 #include "mem.h"
 #include "vm.h"
+#include "proc.h"
 
 
 void kmain(struct mboot_info *mbinf)
@@ -40,6 +41,8 @@ void kmain(struct mboot_info *mbinf)
 
 	/* initialization complete, enable interrupts */
 	enable_intr();
+
+	init_proc();
 
 
 	for(;;) {

@@ -70,6 +70,9 @@ intr_entry_\name:
 intr_entry_common:
 	pusha
 	call dispatch_intr
+
+	.globl intr_ret
+intr_ret:
 	popa
 	/* remove error code and intr num from stack */
 	add $8, %esp
