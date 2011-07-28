@@ -142,7 +142,7 @@ uint32_t alloc_phys_page(void)
 
 					last_alloc_idx = idx;
 
-					printf("alloc_phys_page() -> %x (page: %d)\n", PAGE_TO_ADDR(pg), pg);
+					/*printf("alloc_phys_page() -> %x (page: %d)\n", PAGE_TO_ADDR(pg), pg);*/
 
 					set_intr_state(intr_state);
 					return PAGE_TO_ADDR(pg);
@@ -173,7 +173,7 @@ void free_phys_page(uint32_t addr)
 	int intr_state = get_intr_state();
 	disable_intr();
 
-	if(!IS_FREE(pg)) {
+	if(IS_FREE(pg)) {
 		panic("free_phys_page(%d): I thought that was already free!\n", pg);
 	}
 
