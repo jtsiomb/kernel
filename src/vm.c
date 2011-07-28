@@ -505,7 +505,7 @@ static void free_node(struct page_range *node)
  */
 uint32_t clone_vm(void)
 {
-	int i, dirpg, tblpg, kmem_start_pg;
+	int i, dirpg, tblpg, kstart_dirent;
 	uint32_t paddr;
 	uint32_t *ndir, *ntbl;
 
@@ -528,10 +528,10 @@ uint32_t clone_vm(void)
 	 */
 	free_phys_page(virt_to_phys(tblpg));
 
-	kmem_start_pg = ADDR_TO_PAGE(KMEM_START);
+	kstart_dirent = ADDR_TO_PAGE(KMEM_START) / 1024;
 
 	/* user space */
-	for(i=0; i<kmem_start_pg; i++) {
+	for(i=0; i<kstart_dirent; i++) {
 		if(pgdir[i] & PG_PRESENT) {
 			paddr = alloc_phys_page();
 			map_page(tblpg, ADDR_TO_PAGE(paddr), 0);
@@ -547,7 +547,7 @@ uint32_t clone_vm(void)
 	}
 
 	/* kernel space */
-	for(i=kmem_start_pg; i<1024; i++) {
+	for(i=kstart_dirent; i<1024; i++) {
 		ndir[i] = *PGTBL(i);
 	}
 
