@@ -78,14 +78,6 @@ void context_switch(int pid)
 	ifrm.regs = ctx->regs;
 	ifrm.eflags = ctx->flags;
 
-	ifrm.err = 0xbadf00d;
-
-	asm volatile (
-		"pushf\n\t"
-		"popl %0\n\t"
-		: "=a" (ifrm.eflags)
-	);
-
 	ifrm.eip = ctx->instr_ptr;
 	ifrm.cs = selector(SEGM_KCODE, 0);	/* XXX change this when we setup the TSS */
 	ifrm.esp = 0;/*ctx->stack_ptr;			/* this will only be used when we switch to userspace */

@@ -70,19 +70,25 @@ intr_entry_\name:
 intr_entry_common:
 	pusha
 	call dispatch_intr
-	jmp 0f
-
-	.globl intr_ret
-intr_ret:
-	/* if called as a function from context_switch, we must
-	 * remove the pushed return address before continuing
-     */
-	add $4, %esp
-0:	/* ... we skip to here otherwise */
+intr_ret_local:
 	popa
 	/* remove error code and intr num from stack */
 	add $8, %esp
 	iret
+
+/* intr_ret is called by context_switch to return from the kernel
+ * to userspace. The argument is a properly formed intr_frame
+ * structure with the saved context of the new task.
+ *
+ * First thing to do is remove the return address pointing back
+ * to context_switch, which then leaves us with a proper interrupt
+ * stack frame, so we can jump right in the middle of the regular
+ * interrupt return code above.
+ */
+	.globl intr_ret
+intr_ret:
+	add $4, %esp
+	jmp intr_ret_local
 
 /* by including interrupts.h with ASM defined, the macros above
  * are expanded to generate all required interrupt entry points
