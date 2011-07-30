@@ -26,12 +26,13 @@ void init_proc(void)
 	 * and copy the code of test_proc there.
 	 * (should be mapped at a fixed address)
 	 */
-	proc_size_pg = (test_proc_end - test_proc) / PGSIZE + 1;
+	/*proc_size_pg = (test_proc_end - test_proc) / PGSIZE + 1;
 	if((img_start_pg = pgalloc(proc_size_pg, MEM_USER)) == -1) {
 		panic("failed to allocate space for the init process image\n");
 	}
 	img_start = (void*)PAGE_TO_ADDR(img_start_pg);
-	memcpy(img_start, test_proc, proc_size_pg * PGSIZE);
+	memcpy(img_start, test_proc, proc_size_pg * PGSIZE);*/
+	img_start = test_proc;
 
 	/* instruction pointer at the beginning of the process image */
 	proc[0].ctx.instr_ptr = (uint32_t)img_start;
@@ -47,8 +48,8 @@ void init_proc(void)
 	proc[0].ctx.pgtbl_paddr = clone_vm();
 
 	/* we don't need the image and the stack in this address space */
-	unmap_page_range(img_start_pg, proc_size_pg);
-	pgfree(img_start_pg, proc_size_pg);
+	/*unmap_page_range(img_start_pg, proc_size_pg);
+	pgfree(img_start_pg, proc_size_pg);*/
 
 	unmap_page(stack_pg);
 	pgfree(stack_pg, 1);
@@ -69,6 +70,7 @@ void context_switch(int pid)
 	struct intr_frame ifrm;
 	struct context *ctx = &proc[pid].ctx;
 
+
 	cur_pid = pid;
 
 	ifrm.inum = ifrm.err = 0;
@@ -76,10 +78,19 @@ void context_switch(int pid)
 	ifrm.regs = ctx->regs;
 	ifrm.eflags = ctx->flags;
 
+	ifrm.err = 0xbadf00d;
+
+	asm volatile (
+		"pushf\n\t"
+		"popl %0\n\t"
+		: "=a" (ifrm.eflags)
+	);
+
 	ifrm.eip = ctx->instr_ptr;
-	ifrm.cs = SEGM_KCODE;	/* XXX change this when we setup the TSS */
-	ifrm.esp = ctx->stack_ptr;
-	ifrm.ss = SEGM_KDATA;	/* XXX */
+	ifrm.cs = selector(SEGM_KCODE, 0);	/* XXX change this when we setup the TSS */
+	ifrm.esp = 0;/*ctx->stack_ptr;			/* this will only be used when we switch to userspace */
+	ifrm.regs.esp = ctx->stack_ptr;		/* ... until then... */
+	ifrm.ss = 0;/*selector(SEGM_KDATA, 0);	/* XXX */
 
 	/* switch to the vm of the process */
 	set_pgdir_addr(ctx->pgtbl_paddr);

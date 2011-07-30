@@ -328,8 +328,35 @@ int pgalloc_vrange(int start, int num)
 	node = pglist[area];
 	while(node) {
 		if(start >= node->start && start + num <= node->end) {
-			ret = node->start;
-			node->start += num;
+			ret = start;	/* can do .. */
+
+			if(start == node->start) {
+				/* adjacent to the start of the range */
+				node->start += num;
+			} else if(start + num == node->end) {
+				/* adjacent to the end of the range */
+				node->end = start;
+			} else {
+				/* somewhere in the middle, which means we need
+				 * to allocate a new page_range
+				 */
+				struct page_range *newnode;
+
+				if(!(newnode = alloc_node())) {
+					panic("pgalloc_vrange failed to allocate new page_range while splitting a range in half... bummer\n");
+				}
+				newnode->start = start + num;
+				newnode->end = node->end;
+				newnode->next = node->next;
+
+				node->end = start;
+				node->next = newnode;
+				/* no need to check for null nodes at this point, there's
+				 * certainly stuff at the begining and the end, otherwise we
+				 * wouldn't be here. so break out of it.
+				 */
+				break;
+			}
 
 			if(node->start == node->end) {
 				prev->next = node->next;
@@ -526,7 +553,7 @@ uint32_t clone_vm(void)
 	/* we will allocate physical pages and map them to this virtual page
 	 * as needed in the loop below.
 	 */
-	free_phys_page(virt_to_phys(tblpg));
+	free_phys_page(virt_to_phys((uint32_t)ntbl));
 
 	kstart_dirent = ADDR_TO_PAGE(KMEM_START) / 1024;
 
@@ -548,10 +575,10 @@ uint32_t clone_vm(void)
 
 	/* kernel space */
 	for(i=kstart_dirent; i<1024; i++) {
-		ndir[i] = *PGTBL(i);
+		ndir[i] = pgdir[i];
 	}
 
-	paddr = virt_to_phys(dirpg);
+	paddr = virt_to_phys((uint32_t)ndir);
 
 	/* unmap before freeing to avoid deallocating the physical pages */
 	unmap_page(dirpg);

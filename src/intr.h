@@ -24,7 +24,7 @@ struct intr_frame {
 	uint32_t eip, cs, eflags;
 	/* pushed by CPU during interrupt entry from user space */
 	uint32_t esp, ss;
-};
+} __attribute__ ((packed));
 
 
 

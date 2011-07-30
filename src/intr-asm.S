@@ -70,9 +70,15 @@ intr_entry_\name:
 intr_entry_common:
 	pusha
 	call dispatch_intr
+	jmp 0f
 
 	.globl intr_ret
 intr_ret:
+	/* if called as a function from context_switch, we must
+	 * remove the pushed return address before continuing
+     */
+	add $4, %esp
+0:	/* ... we skip to here otherwise */
 	popa
 	/* remove error code and intr num from stack */
 	add $8, %esp
