@@ -3,6 +3,8 @@
 #include "intr.h"
 #include "asmops.h"
 #include "timer.h"
+#include "proc.h"
+#include "sched.h"
 #include "config.h"
 
 /* frequency of the oscillator driving the 8254 timer */
@@ -39,7 +41,22 @@
 #define CMD_MODE_BCD		1
 
 
+#define MSEC_TO_TICKS(ms)	((ms) * TICK_FREQ_HZ / 1000)
+
+struct timer_event {
+	int dt;	/* remaining ticks delta from the previous event */
+
+	void (*callback)(void*);
+	void *cbarg;
+
+	struct timer_event *next;
+};
+
+
 static void intr_handler();
+
+
+static struct timer_event *evlist;
 
 
 void init_timer(void)
@@ -62,11 +79,101 @@ void init_timer(void)
 	interrupt(IRQ_TO_INTR(0), intr_handler);
 }
 
+int start_timer(unsigned long msec, timer_func_t cbfunc, void *cbarg)
+{
+	int ticks, tsum, istate;
+	struct timer_event *ev, *node;
+
+	printf("start_timer(%lu)\n", msec);
+
+	if((ticks = MSEC_TO_TICKS(msec)) <= 0) {
+		cbfunc(cbarg);
+		return 0;
+	}
+
+	if(!(ev = malloc(sizeof *ev))) {
+		printf("start_timer: failed to allocate timer_event structure\n");
+		return -1;
+	}
+	ev->callback = cbfunc;
+	ev->cbarg = cbarg;
+
+	istate = get_intr_state();
+	disable_intr();
+
+	/* insert at the beginning */
+	if(!evlist || ticks <= evlist->dt) {
+		ev->next = evlist;
+		evlist = ev;
+
+		ev->dt = ticks;
+		if(ev->next) {
+			ev->next->dt -= ticks;
+		}
+		set_intr_state(istate);
+		return 0;
+	}
+
+	tsum = evlist->dt;
+	node = evlist;
+
+	while(node->next && ticks > tsum + node->next->dt) {
+		tsum += node->next->dt;
+		node = node->next;
+	}
+
+	ev->next = node->next;
+	node->next = ev;
+
+	/* fix the relative times */
+	ev->dt = ticks - tsum;
+	if(ev->next) {
+		ev->next->dt -= ev->dt;
+	}
+
+	set_intr_state(istate);
+	return 0;
+}
+
 /* This will be called by the interrupt dispatcher approximately
  * every 1/250th of a second, so it must be extremely fast.
  * For now, just increasing a tick counter will suffice.
  */
-static void intr_handler()
+static void intr_handler(int inum)
 {
+	int istate;
+	struct process *cur_proc;
+
 	nticks++;
+
+	printf("TICKS: %d\n", nticks);
+
+	istate = get_intr_state();
+	disable_intr();
+
+	/* find out if there are any timers that have to go off */
+	if(evlist) {
+		evlist->dt--;
+
+		while(evlist->dt <= 0) {
+			struct timer_event *ev = evlist;
+			evlist = evlist->next;
+
+			printf("timer going off!!!\n");
+			ev->callback(ev->cbarg);
+			free(ev);
+		}
+	}
+
+	if((cur_proc = get_current_proc())) {
+		if(--cur_proc->ticks_left <= 0) {
+			/* since schedule will not return, we have to notify
+			 * the PIC that we're done with the IRQ handling
+			 */
+			end_of_irq(INTR_TO_IRQ(inum));
+			schedule();
+		}
+	}
+
+	set_intr_state(istate);
 }

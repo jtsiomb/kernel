@@ -38,7 +38,6 @@
 static void init_pic(int offset);
 static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int type);
 static void set_intr_entry(int num, void (*handler)(void));
-static void end_of_irq(int irq);
 
 /* defined in intr-asm.S */
 void set_idt(uint32_t addr, uint16_t limit);
@@ -88,7 +87,7 @@ void interrupt(int intr_num, intr_func_t func)
 void dispatch_intr(struct intr_frame frm)
 {
 	if(intr_func[frm.inum]) {
-		intr_func[frm.inum](frm.inum, frm.err);
+		intr_func[frm.inum](frm.inum, &frm);
 	} else {
 		if(frm.inum < 32) {
 			panic("unhandled exception %d, error code: %d\n", frm.inum, frm.err);
@@ -141,7 +140,7 @@ static void set_intr_entry(int num, void (*handler)(void))
 	gate_desc(idt + num, selector(SEGM_KCODE, 0), (uint32_t)handler, 0, type);
 }
 
-static void end_of_irq(int irq)
+void end_of_irq(int irq)
 {
 	if(irq > 7) {
 		outb(OCW2_EOI, PIC2_CMD);

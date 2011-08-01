@@ -15,14 +15,29 @@ struct context {
 	/* TODO add FPU state */
 };
 
+enum proc_state {
+	STATE_RUNNING,
+	STATE_BLOCKED,
+	STATE_ZOMBIE
+};
+
 
 struct process {
-	int parent;
+	int id, parent;
+	enum proc_state state;
+
+	int ticks_left;
 	struct context ctx;
+
+	struct process *next, *prev;	/* for the scheduler queues */
 };
 
 void init_proc(void);
 
 void context_switch(int pid);
+
+int get_current_pid(void);
+struct process *get_current_proc(void);
+struct process *get_process(int pid);
 
 #endif	/* PROC_H_ */

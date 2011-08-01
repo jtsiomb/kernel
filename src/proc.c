@@ -5,6 +5,8 @@
 #include "segm.h"
 #include "intr.h"
 #include "panic.h"
+#include "syscall.h"
+#include "sched.h"
 
 
 /* defined in test_proc.S */
@@ -18,50 +20,50 @@ void init_proc(void)
 {
 	int proc_size_pg, img_start_pg, stack_pg;
 	void *img_start;
-	cur_pid = -1;
+	cur_pid = 0;
+
+	init_syscall();
 
 	/* prepare the first process */
+	proc[1].id = 1;
+	proc[1].parent = 0;
 
 	/* allocate a chunk of memory for the process image
 	 * and copy the code of test_proc there.
 	 * (should be mapped at a fixed address)
 	 */
-	/*proc_size_pg = (test_proc_end - test_proc) / PGSIZE + 1;
+	proc_size_pg = (test_proc_end - test_proc) / PGSIZE + 1;
 	if((img_start_pg = pgalloc(proc_size_pg, MEM_USER)) == -1) {
 		panic("failed to allocate space for the init process image\n");
 	}
 	img_start = (void*)PAGE_TO_ADDR(img_start_pg);
-	memcpy(img_start, test_proc, proc_size_pg * PGSIZE);*/
-	img_start = test_proc;
+	memcpy(img_start, test_proc, proc_size_pg * PGSIZE);
 
 	/* instruction pointer at the beginning of the process image */
-	proc[0].ctx.instr_ptr = (uint32_t)img_start;
+	proc[1].ctx.instr_ptr = (uint32_t)img_start;
 
 	/* allocate the first page of the process stack */
 	stack_pg = ADDR_TO_PAGE(KMEM_START) - 1;
 	if(pgalloc_vrange(stack_pg, 1) == -1) {
 		panic("failed to allocate user stack page\n");
 	}
-	proc[0].ctx.stack_ptr = PAGE_TO_ADDR(stack_pg) + PGSIZE;
+	proc[1].ctx.stack_ptr = PAGE_TO_ADDR(stack_pg) + PGSIZE;
 
 	/* create the virtual address space for this process */
-	proc[0].ctx.pgtbl_paddr = clone_vm();
+	proc[1].ctx.pgtbl_paddr = clone_vm();
 
 	/* we don't need the image and the stack in this address space */
-	/*unmap_page_range(img_start_pg, proc_size_pg);
-	pgfree(img_start_pg, proc_size_pg);*/
+	unmap_page_range(img_start_pg, proc_size_pg);
+	pgfree(img_start_pg, proc_size_pg);
 
 	unmap_page(stack_pg);
 	pgfree(stack_pg, 1);
 
+	/* add it to the scheduler queues */
+	//add_proc(1, STATE_RUNNING);
 
-	/* switch to it by calling a function that takes the context
-	 * of the current process, plugs the values into the interrupt
-	 * stack, and calls iret.
-	 * (should also set ss0/sp0 in TSS before returning)
-	 */
-	context_switch(0);
-	/* XXX this will never return */
+	/* switch to the initial process, this never returns */
+	context_switch(1);
 }
 
 
@@ -76,7 +78,7 @@ void context_switch(int pid)
 	ifrm.inum = ifrm.err = 0;
 
 	ifrm.regs = ctx->regs;
-	ifrm.eflags = ctx->flags;
+	ifrm.eflags = ctx->flags | (1 << 9);
 
 	ifrm.eip = ctx->instr_ptr;
 	ifrm.cs = selector(SEGM_KCODE, 0);	/* XXX change this when we setup the TSS */
@@ -88,4 +90,19 @@ void context_switch(int pid)
 	set_pgdir_addr(ctx->pgtbl_paddr);
 
 	intr_ret(ifrm);
+}
+
+int get_current_pid(void)
+{
+	return cur_pid;
+}
+
+struct process *get_current_proc(void)
+{
+	return cur_pid ? &proc[cur_pid] : 0;
+}
+
+struct process *get_process(int pid)
+{
+	return &proc[pid];
 }

@@ -1,4 +1,5 @@
-#include <sysnum.h>
+#define ASM
+#include <syscall.h>
 
 	.text
 	.globl test_proc

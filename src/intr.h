@@ -28,7 +28,7 @@ struct intr_frame {
 
 
 
-typedef void (*intr_func_t)(int, uint32_t);
+typedef void (*intr_func_t)(int, struct intr_frame *frm);
 
 
 void init_intr(void);
@@ -40,5 +40,7 @@ int get_intr_state(void);
 void set_intr_state(int s);
 
 void intr_ret(struct intr_frame ifrm);
+
+void end_of_irq(int irq);
 
 #endif	/* INTR_H_ */

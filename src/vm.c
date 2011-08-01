@@ -37,7 +37,7 @@ void flush_tlb_addr(uint32_t addr);
 uint32_t get_fault_addr(void);
 
 static void coalesce(struct page_range *low, struct page_range *mid, struct page_range *high);
-static void pgfault(int inum, uint32_t err);
+static void pgfault(int inum, struct intr_frame *frm);
 static struct page_range *alloc_node(void);
 static void free_node(struct page_range *node);
 
@@ -457,18 +457,18 @@ static void coalesce(struct page_range *low, struct page_range *mid, struct page
 	}
 }
 
-static void pgfault(int inum, uint32_t err)
+static void pgfault(int inum, struct intr_frame *frm)
 {
 	printf("~~~~ PAGE FAULT ~~~~\n");
 
 	printf("fault address: %x\n", get_fault_addr());
 
-	if(err & PG_PRESENT) {
-		if(err & 8) {
+	if(frm->err & PG_PRESENT) {
+		if(frm->err & 8) {
 			printf("reserved bit set in some paging structure\n");
 		} else {
-			printf("%s protection violation ", (err & PG_WRITABLE) ? "write" : "read");
-			printf("in %s mode\n", err & PG_USER ? "user" : "kernel");
+			printf("%s protection violation ", (frm->err & PG_WRITABLE) ? "write" : "read");
+			printf("in %s mode\n", frm->err & PG_USER ? "user" : "kernel");
 		}
 	} else {
 		printf("page not present\n");
