@@ -21,16 +21,17 @@ static struct proc_list zombieq;
 
 void schedule(void)
 {
+	disable_intr();
+
 	if(EMPTY(runq)) {
 		/* idle "process".
 		 * make sure interrupts are enabled before halting
 		 */
 		enable_intr();
 		halt_cpu();
+		printf("fuck you!\n");
 		/* this won't return, it'll just wake up in an interrupt later */
 	}
-
-	disable_intr();
 
 	/* if the current process exhausted its timeslice,
 	 * move it to the back of the queue.
@@ -54,10 +55,12 @@ int add_proc(int pid, enum proc_state state)
 {
 	int istate;
 	struct proc_list *q;
-	struct process *proc = get_process(pid);
+	struct process *proc;
 
 	istate = get_intr_state();
 	disable_intr();
+
+	proc = get_process(pid);
 
 	q = state == STATE_RUNNING ? &runq : &waitq;
 

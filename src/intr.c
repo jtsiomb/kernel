@@ -48,6 +48,8 @@ static desc_t idt[256];
 /* table of handler functions for all interrupts */
 static intr_func_t intr_func[256];
 
+static struct intr_frame *cur_intr_frame;
+
 
 void init_intr(void)
 {
@@ -74,6 +76,14 @@ void init_intr(void)
 	init_pic(IRQ_OFFSET);
 }
 
+/* retrieve the current interrupt frame.
+ * returns 0 when called during kernel init.
+ */
+struct intr_frame *get_intr_frame(void)
+{
+	return cur_intr_frame;
+}
+
 /* set an interrupt handler function for a particular interrupt */
 void interrupt(int intr_num, intr_func_t func)
 {
@@ -86,8 +96,10 @@ void interrupt(int intr_num, intr_func_t func)
  */
 void dispatch_intr(struct intr_frame frm)
 {
+	cur_intr_frame = &frm;
+
 	if(intr_func[frm.inum]) {
-		intr_func[frm.inum](frm.inum, &frm);
+		intr_func[frm.inum](frm.inum);
 	} else {
 		if(frm.inum < 32) {
 			panic("unhandled exception %d, error code: %d\n", frm.inum, frm.err);

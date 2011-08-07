@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include "term.h"
 #include "vid.h"
+#include "intr.h"
 
 static int bg, fg = LTGRAY;
 static int cursor_x, cursor_y;
@@ -32,6 +33,9 @@ int set_back_color(int c)
  */
 int putchar(int c)
 {
+	int istate = get_intr_state();
+	disable_intr();
+
 	switch(c) {
 	case '\n':
 		cursor_y++;
@@ -65,5 +69,7 @@ int putchar(int c)
 	}
 
 	set_cursor(cursor_x, cursor_y);
+
+	set_intr_state(istate);
 	return c;
 }

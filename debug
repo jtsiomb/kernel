@@ -1,0 +1,4 @@
+#!/bin/sh
+
+qemu -kernel kernel.elf -s -S &
+gdb

@@ -1,4 +1,6 @@
+#include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "proc.h"
 #include "tss.h"
 #include "vm.h"
@@ -8,6 +10,7 @@
 #include "syscall.h"
 #include "sched.h"
 
+#define	FLAGS_INTR_BIT	9
 
 /* defined in test_proc.S */
 void test_proc(void);
@@ -39,6 +42,8 @@ void init_proc(void)
 	img_start = (void*)PAGE_TO_ADDR(img_start_pg);
 	memcpy(img_start, test_proc, proc_size_pg * PGSIZE);
 
+	printf("copied init process at: %x\n", (unsigned int)img_start);
+
 	/* instruction pointer at the beginning of the process image */
 	proc[1].ctx.instr_ptr = (uint32_t)img_start;
 
@@ -48,6 +53,9 @@ void init_proc(void)
 		panic("failed to allocate user stack page\n");
 	}
 	proc[1].ctx.stack_ptr = PAGE_TO_ADDR(stack_pg) + PGSIZE;
+
+	proc[1].stack_end = KMEM_START;
+	proc[1].stack_start = KMEM_START - PGSIZE;
 
 	/* create the virtual address space for this process */
 	proc[1].ctx.pgtbl_paddr = clone_vm();
@@ -60,7 +68,7 @@ void init_proc(void)
 	pgfree(stack_pg, 1);
 
 	/* add it to the scheduler queues */
-	//add_proc(1, STATE_RUNNING);
+	add_proc(1, STATE_RUNNING);
 
 	/* switch to the initial process, this never returns */
 	context_switch(1);
@@ -69,26 +77,33 @@ void init_proc(void)
 
 void context_switch(int pid)
 {
+	struct context *ctx;
 	struct intr_frame ifrm;
-	struct context *ctx = &proc[pid].ctx;
+	struct intr_frame *cur_frame = get_intr_frame();
 
+	assert(0);
 
+	if(cur_pid == pid) {
+		assert(cur_frame);
+		intr_ret(*cur_frame);
+	}
+
+	ctx = &proc[pid].ctx;
 	cur_pid = pid;
 
 	ifrm.inum = ifrm.err = 0;
 
 	ifrm.regs = ctx->regs;
-	ifrm.eflags = ctx->flags | (1 << 9);
+	ifrm.eflags = ctx->flags | (1 << FLAGS_INTR_BIT);
 
 	ifrm.eip = ctx->instr_ptr;
 	ifrm.cs = selector(SEGM_KCODE, 0);	/* XXX change this when we setup the TSS */
-	ifrm.esp = 0;/*ctx->stack_ptr;			/* this will only be used when we switch to userspace */
-	ifrm.regs.esp = ctx->stack_ptr;		/* ... until then... */
-	ifrm.ss = 0;/*selector(SEGM_KDATA, 0);	/* XXX */
+	/*ifrm.regs.esp = ctx->stack_ptr;*/		/* ... until then... */
+	ifrm.esp = ctx->stack_ptr;			/* this will only be used when we switch to userspace */
+	ifrm.ss = selector(SEGM_KDATA, 0);
 
 	/* switch to the vm of the process */
 	set_pgdir_addr(ctx->pgtbl_paddr);
-
 	intr_ret(ifrm);
 }
 

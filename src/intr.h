@@ -28,10 +28,12 @@ struct intr_frame {
 
 
 
-typedef void (*intr_func_t)(int, struct intr_frame *frm);
+typedef void (*intr_func_t)(int);
 
 
 void init_intr(void);
+
+struct intr_frame *get_intr_frame(void);
 
 void interrupt(int intr_num, intr_func_t func);
 

@@ -27,6 +27,12 @@ struct process {
 	enum proc_state state;
 
 	int ticks_left;
+
+	/* extends of the process heap, increased by sbrk */
+
+	/* first page of the user stack, extends up to KMEM_START */
+	int stack_start_pg;
+
 	struct context ctx;
 
 	struct process *next, *prev;	/* for the scheduler queues */

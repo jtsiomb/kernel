@@ -1,0 +1,5 @@
+\.d$
+\.o$
+\.swp$
+^kernel.elf$
+^link.map$

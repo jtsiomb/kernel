@@ -39,11 +39,10 @@ void kmain(struct mboot_info *mbinf)
 	init_timer();
 	init_rtc();
 
-	/* initialization complete, enable interrupts */
-	enable_intr();
-
+	/* create the first process and switch to it */
 	init_proc();
 
+	/* XXX unreachable */
 
 	for(;;) {
 		halt_cpu();

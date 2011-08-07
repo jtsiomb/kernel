@@ -7,7 +7,7 @@
 
 static int (*sys_func[NUM_SYSCALLS])();
 
-static void syscall(int inum, struct intr_frame *frm);
+static void syscall(int inum);
 
 static int sys_exit(int status);
 static int sys_hello(void);
@@ -22,9 +22,13 @@ void init_syscall(void)
 	interrupt(SYSCALL_INT, syscall);
 }
 
-static void syscall(int inum, struct intr_frame *frm)
+static void syscall(int inum)
 {
-	int idx = frm->regs.eax;
+	struct intr_frame *frm;
+	int idx;
+
+	frm = get_intr_frame();
+	idx = frm->regs.eax;
 
 	if(idx < 0 || idx >= NUM_SYSCALLS) {
 		printf("invalid syscall: %d\n", idx);

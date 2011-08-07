@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <assert.h>
+#include "config.h"
 #include "vm.h"
-#include <stdio.h>
 #include "intr.h"
 #include "mem.h"
 #include "panic.h"
-
+#include "proc.h"
 
 #define IDMAP_START		0xa0000
 
@@ -37,7 +38,7 @@ void flush_tlb_addr(uint32_t addr);
 uint32_t get_fault_addr(void);
 
 static void coalesce(struct page_range *low, struct page_range *mid, struct page_range *high);
-static void pgfault(int inum, struct intr_frame *frm);
+static void pgfault(int inum);
 static struct page_range *alloc_node(void);
 static void free_node(struct page_range *node);
 
@@ -457,11 +458,43 @@ static void coalesce(struct page_range *low, struct page_range *mid, struct page
 	}
 }
 
-static void pgfault(int inum, struct intr_frame *frm)
+static void pgfault(int inum)
 {
-	printf("~~~~ PAGE FAULT ~~~~\n");
+	struct intr_frame *frm = get_intr_frame();
+	uint32_t fault_addr = get_fault_addr();
 
-	printf("fault address: %x\n", get_fault_addr());
+	/* the fault occured in user space */
+	if(frm->esp < KMEM_START + 1) {
+		int fault_page = ADDR_TO_PAGE(fault_addr);
+		struct process *proc = get_current_proc();
+		assert(proc);
+
+		printf("DBG: page fault in user space\n");
+
+		if(frm->err & PG_PRESENT) {
+			/* it's not due to a missing page, just panic */
+			goto unhandled;
+		}
+
+		/* detect if it's an automatic stack growth deal */
+		if(fault_page < proc->stack_start_pg && proc->stack_start_pg - fault_page < USTACK_MAXGROW) {
+			int num_pages = proc->stack_start_pg - fault_page;
+			printf("growing user (%d) stack by %d pages\n", proc->id, num_pages);
+
+			if(pgalloc_vrange(fault_page, num_pages) != fault_page) {
+				printf("failed to allocate VM for stack growth\n");
+				/* TODO: in the future we'd SIGSEGV the process here, for now just panic */
+				goto unhandled;
+			}
+			proc->stack_start_pg = fault_page;
+
+			return;
+		}
+	}
+
+unhandled:
+	printf("~~~~ PAGE FAULT ~~~~\n");
+	printf("fault address: %x\n", fault_addr);
 
 	if(frm->err & PG_PRESENT) {
 		if(frm->err & 8) {
