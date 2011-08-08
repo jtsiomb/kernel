@@ -62,7 +62,7 @@ int add_proc(int pid, enum proc_state state)
 
 	proc = get_process(pid);
 
-	q = state == STATE_RUNNING ? &runq : &waitq;
+	q = state == STATE_RUNNABLE ? &runq : &waitq;
 
 	ins_back(q, proc);
 	proc->state = state;
@@ -76,7 +76,7 @@ int block_proc(int pid)
 	int istate;
 	struct process *proc = get_process(pid);
 
-	if(proc->state != STATE_RUNNING) {
+	if(proc->state != STATE_RUNNABLE) {
 		printf("block_proc: process %d not running\n", pid);
 		return -1;
 	}
@@ -107,7 +107,7 @@ int unblock_proc(int pid)
 
 	remove(&waitq, proc);
 	ins_back(&runq, proc);
-	proc->state = STATE_RUNNING;
+	proc->state = STATE_RUNNABLE;
 
 	set_intr_state(istate);
 	return 0;

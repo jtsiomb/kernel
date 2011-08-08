@@ -16,7 +16,7 @@ struct context {
 };
 
 enum proc_state {
-	STATE_RUNNING,
+	STATE_RUNNABLE,
 	STATE_BLOCKED,
 	STATE_ZOMBIE
 };

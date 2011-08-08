@@ -53,22 +53,20 @@ void init_proc(void)
 		panic("failed to allocate user stack page\n");
 	}
 	proc[1].ctx.stack_ptr = PAGE_TO_ADDR(stack_pg) + PGSIZE;
-
-	proc[1].stack_end = KMEM_START;
-	proc[1].stack_start = KMEM_START - PGSIZE;
+	proc[1].stack_start_pg = stack_pg;
 
 	/* create the virtual address space for this process */
-	proc[1].ctx.pgtbl_paddr = clone_vm();
+	/*proc[1].ctx.pgtbl_paddr = clone_vm();*/
 
 	/* we don't need the image and the stack in this address space */
-	unmap_page_range(img_start_pg, proc_size_pg);
+	/*unmap_page_range(img_start_pg, proc_size_pg);
 	pgfree(img_start_pg, proc_size_pg);
 
 	unmap_page(stack_pg);
-	pgfree(stack_pg, 1);
+	pgfree(stack_pg, 1);*/
 
 	/* add it to the scheduler queues */
-	add_proc(1, STATE_RUNNING);
+	add_proc(1, STATE_RUNNABLE);
 
 	/* switch to the initial process, this never returns */
 	context_switch(1);
