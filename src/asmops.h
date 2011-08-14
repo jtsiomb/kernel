@@ -13,6 +13,9 @@ struct registers {
 #define disable_intr() asm volatile("cli")
 #define halt_cpu() asm volatile("hlt")
 
+#define push_regs() asm volatile("pusha");
+#define pop_regs() asm volatile("popa");
+
 #define inb(dest, port) asm volatile( \
 	"inb %1, %0\n\t" \
 	: "=a" ((unsigned char)(dest)) \
@@ -41,5 +44,6 @@ struct registers {
 	:: "a" ((unsigned long)(src)), "dN" ((unsigned short)(port)))
 
 #define iodelay() outb(0, 0x80)
+
 
 #endif	/* ASMOPS_H_ */

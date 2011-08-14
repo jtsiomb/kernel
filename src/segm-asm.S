@@ -37,3 +37,10 @@ set_gdt:
 	movw %ax, (lim)
 	lgdt (lim)	
 	ret
+
+/* set_task_reg(uint16_t tss_selector)
+ * loads the TSS selector in the task register */
+	.globl set_task_reg
+set_task_reg:
+	ltr 4(%esp)
+	ret

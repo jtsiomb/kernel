@@ -18,6 +18,8 @@
 struct intr_frame {
 	/* registers pushed by pusha in intr_entry_* */
 	struct registers regs;
+	/* data segment selectors */
+	uint32_t ds, es, fs, gs;
 	/* interrupt number and error code pushed in intr_entry_* */
 	uint32_t inum, err;
 	/* pushed by CPU during interrupt entry */

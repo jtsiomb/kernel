@@ -1,3 +1,6 @@
+#define ASM
+#include "segm.h"
+
 	.data
 	.align 4
 	.short 0
@@ -68,10 +71,29 @@ intr_entry_\name:
  */
 	.extern dispatch_intr
 intr_entry_common:
+	/* save the current data segment selectors */
+	pushl %gs
+	pushl %fs
+	pushl %es
+	pushl %ds
+	/* save general purpose registers */
 	pusha
+	/* if we entered from userspace ss and cs is set correctly, but
+     * we must make sure all the other selectors are set to the
+     * kernel data segment */
+	mov $SEGM_KDATA, %ds
+	mov $SEGM_KDATA, %es
+	mov $SEGM_KDATA, %fs
+	mov $SEGM_KDATA, %gs
 	call dispatch_intr
 intr_ret_local:
+	/* restore general purpose registers */
 	popa
+	/* restore data segment selectors */
+	popl %ds
+	popl %es
+	popl %fs
+	popl %gs
 	/* remove error code and intr num from stack */
 	add $8, %esp
 	iret
@@ -93,5 +115,4 @@ intr_ret:
 /* by including interrupts.h with ASM defined, the macros above
  * are expanded to generate all required interrupt entry points
  */
-#define ASM
 #include <interrupts.h>

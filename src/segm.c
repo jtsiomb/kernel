@@ -21,8 +21,7 @@
 
 enum {TYPE_DATA, TYPE_CODE};
 
-#define TSS_TYPE_BITS	0x900
-#define TSS_BUSY		BIT_BUSY
+#define TSS_TYPE_BITS	(BIT_ACCESSED | BIT_CODE)
 
 static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type);
 static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, unsigned int busy);
@@ -30,6 +29,7 @@ static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, unsi
 /* these functions are implemented in segm-asm.S */
 void setup_selectors(uint16_t code, uint16_t data);
 void set_gdt(uint32_t addr, uint16_t limit);
+void set_task_reg(uint16_t tss_selector);
 
 
 /* our global descriptor table */
@@ -43,7 +43,6 @@ void init_segm(void)
 	segm_desc(gdt + SEGM_KDATA, 0, 0xffffffff, 0, TYPE_DATA);
 	segm_desc(gdt + SEGM_UCODE, 0, 0xffffffff, 3, TYPE_CODE);
 	segm_desc(gdt + SEGM_UDATA, 0, 0xffffffff, 3, TYPE_DATA);
-	task_desc(gdt + SEGM_TASK, 0, 0xffffffff, 3, TSS_BUSY);
 
 	set_gdt((uint32_t)gdt, sizeof gdt - 1);
 
@@ -54,6 +53,12 @@ void init_segm(void)
 uint16_t selector(int idx, int rpl)
 {
 	return (idx << 3) | (rpl & 3);
+}
+
+void set_tss(uint32_t addr)
+{
+	task_desc(gdt + SEGM_TASK, 0, sizeof(struct tss) - 1, 3, TSS_BUSY);
+	set_task_reg(selector(SEGM_TASK, 0));
 }
 
 static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type)

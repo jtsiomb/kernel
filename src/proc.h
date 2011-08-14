@@ -7,10 +7,10 @@
 #define MAX_PROC	128
 
 struct context {
-	struct registers regs;	/* saved general purpose registers */
-	uint32_t instr_ptr;		/* saved eip */
+	/*struct registers regs;*/	/* saved general purpose registers */
+	/*uint32_t instr_ptr;*/		/* saved eip */
 	uint32_t stack_ptr;		/* saved esp */
-	uint32_t flags;			/* saved eflags */
+	/*uint32_t flags;*/			/* saved eflags */
 	uint32_t pgtbl_paddr;	/* physical address of the page table */
 	/* TODO add FPU state */
 };
@@ -31,7 +31,9 @@ struct process {
 	/* extends of the process heap, increased by sbrk */
 
 	/* first page of the user stack, extends up to KMEM_START */
-	int stack_start_pg;
+	int user_stack_pg;
+	/* first page of the kernel stack, (KERN_STACK_SIZE) */
+	int kern_stack_pg;
 
 	struct context ctx;
 

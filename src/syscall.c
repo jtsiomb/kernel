@@ -35,26 +35,26 @@ static void syscall(int inum)
 		return;
 	}
 
+	/* the return value goes into the interrupt frame copy of the user's eax
+	 * so that it'll be restored into eax before returning to userland.
+	 */
 	frm->regs.eax = sys_func[idx](frm->regs.ebx, frm->regs.ecx, frm->regs.edx, frm->regs.esi, frm->regs.edi);
-	schedule();
 }
 
 static int sys_exit(int status)
 {
+	printf("SYSCALL: exit\n");
 	return -1;	/* not implemented yet */
 }
 
 static int sys_hello(void)
 {
-	/*printf("process %d says hello!\n", get_current_pid());*/
+	printf("process %d says hello!\n", get_current_pid());
 	return 0;
 }
 
 static int sys_sleep(int sec)
 {
-	int pid = get_current_pid();
-	/*printf("process %d will sleep for %d sec\n", pid, sec);*/
-	start_timer(sec * 1000, (timer_func_t)unblock_proc, (void*)pid);
-	block_proc(pid);
-	return 0;
+	printf("SYSCALL: sleep\n");
+	return -1;
 }
