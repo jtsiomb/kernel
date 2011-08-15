@@ -45,10 +45,6 @@
 
 struct timer_event {
 	int dt;	/* remaining ticks delta from the previous event */
-
-	void (*callback)(void*);
-	void *cbarg;
-
 	struct timer_event *next;
 };
 
@@ -79,24 +75,21 @@ void init_timer(void)
 	interrupt(IRQ_TO_INTR(0), intr_handler);
 }
 
-int start_timer(unsigned long msec, timer_func_t cbfunc, void *cbarg)
+void sleep(unsigned long msec)
 {
 	int ticks, tsum, istate;
 	struct timer_event *ev, *node;
 
-	printf("start_timer(%lu)\n", msec);
+	printf("sleep(%lu)\n", msec);
 
 	if((ticks = MSEC_TO_TICKS(msec)) <= 0) {
-		cbfunc(cbarg);
-		return 0;
+		return;
 	}
 
 	if(!(ev = malloc(sizeof *ev))) {
-		printf("start_timer: failed to allocate timer_event structure\n");
-		return -1;
+		printf("sleep: failed to allocate timer_event structure\n");
+		return;
 	}
-	ev->callback = cbfunc;
-	ev->cbarg = cbarg;
 
 	istate = get_intr_state();
 	disable_intr();
@@ -110,29 +103,30 @@ int start_timer(unsigned long msec, timer_func_t cbfunc, void *cbarg)
 		if(ev->next) {
 			ev->next->dt -= ticks;
 		}
-		set_intr_state(istate);
-		return 0;
-	}
+	} else {
 
-	tsum = evlist->dt;
-	node = evlist;
+		tsum = evlist->dt;
+		node = evlist;
 
-	while(node->next && ticks > tsum + node->next->dt) {
-		tsum += node->next->dt;
-		node = node->next;
-	}
+		while(node->next && ticks > tsum + node->next->dt) {
+			tsum += node->next->dt;
+			node = node->next;
+		}
 
-	ev->next = node->next;
-	node->next = ev;
+		ev->next = node->next;
+		node->next = ev;
 
-	/* fix the relative times */
-	ev->dt = ticks - tsum;
-	if(ev->next) {
-		ev->next->dt -= ev->dt;
+		/* fix the relative times */
+		ev->dt = ticks - tsum;
+		if(ev->next) {
+			ev->next->dt -= ev->dt;
+		}
 	}
 
 	set_intr_state(istate);
-	return 0;
+
+	/* wait on the address of this timer event */
+	wait(ev);
 }
 
 /* This will be called by the interrupt dispatcher approximately
@@ -160,17 +154,15 @@ static void intr_handler(int inum)
 			evlist = evlist->next;
 
 			printf("timer going off!!!\n");
-			ev->callback(ev->cbarg);
+			/* wake up all processes waiting on this address */
+			wakeup(ev);
 			free(ev);
 		}
 	}
 
 	if((cur_proc = get_current_proc())) {
+		/* if the timeslice of this process has expire, call the scheduler */
 		if(--cur_proc->ticks_left <= 0) {
-			/* since schedule will not return, we have to notify
-			 * the PIC that we're done with the IRQ handling
-			 */
-			end_of_irq(INTR_TO_IRQ(inum));
 			schedule();
 		}
 	}

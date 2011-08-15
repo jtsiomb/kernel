@@ -26,6 +26,9 @@ struct process {
 	int id, parent;
 	enum proc_state state;
 
+	/* when blocked it's waiting for a wakeup on this address */
+	void *wait_addr;
+
 	int ticks_left;
 
 	/* extends of the process heap, increased by sbrk */

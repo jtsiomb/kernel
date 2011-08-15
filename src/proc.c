@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "config.h"
 #include "proc.h"
 #include "tss.h"
 #include "vm.h"
@@ -11,10 +12,12 @@
 #include "sched.h"
 #include "tss.h"
 
-#define	FLAGS_INTR_BIT	9
+#define	FLAGS_INTR_BIT	(1 << 9)
 
 static void start_first_proc(void);
 
+/* defined in proc-asm.S */
+uint32_t switch_stack(uint32_t new_stack);
 
 /* defined in test_proc.S */
 void test_proc(void);
@@ -36,7 +39,7 @@ void init_proc(void)
 	if((tss_page = pgalloc(1, MEM_KERNEL)) == -1) {
 		panic("failed to allocate memory for the task state segment\n");
 	}
-	tss = (struct tss*)PAGE_TO_ADDR(tss_page);
+	tss = (struct task_state*)PAGE_TO_ADDR(tss_page);
 
 	/* the kernel stack segment never changes so we might as well set it now
 	 * the only other thing that we use in the tss is the kernel stack pointer
@@ -45,7 +48,7 @@ void init_proc(void)
 	memset(tss, 0, sizeof *tss);
 	tss->ss0 = selector(SEGM_KDATA, 0);
 
-	set_tss((uint32_t)virt_to_phys(tss));
+	set_tss((uint32_t)tss);
 
 	/* initialize system call handler (see syscall.c) */
 	init_syscall();
@@ -58,13 +61,19 @@ static void start_first_proc(void)
 {
 	struct process *p;
 	int proc_size_pg, img_start_pg, stack_pg;
-	uint32_t img_start_addr, ustack_addr;
+	uint32_t img_start_addr;
 	struct intr_frame ifrm;
 
 	/* prepare the first process */
 	p = proc + 1;
 	p->id = 1;
 	p->parent = 0;	/* no parent for init */
+
+	p->ticks_left = TIMESLICE_TICKS;
+	p->next = p->prev = 0;
+
+	/* the first process may keep this existing page table */
+	p->ctx.pgtbl_paddr = get_pgdir_addr();
 
 	/* allocate a chunk of memory for the process image
 	 * and copy the code of test_proc there.
@@ -102,7 +111,7 @@ static void start_first_proc(void)
 	ifrm.esp = PAGE_TO_ADDR(stack_pg) + PGSIZE;
 	ifrm.ss = selector(SEGM_UDATA, 3);
 	/* instruction pointer at the beginning of the process image */
-	ifrm.regs.eip = img_start_addr;
+	ifrm.eip = img_start_addr;
 	ifrm.cs = selector(SEGM_UCODE, 3);
 	/* make sure the user will run with interrupts enabled */
 	ifrm.eflags = FLAGS_INTR_BIT;
@@ -110,7 +119,9 @@ static void start_first_proc(void)
 	ifrm.ds = ifrm.es = ifrm.fs = ifrm.gs = ifrm.ss;
 
 	/* add it to the scheduler queues */
-	add_proc(p->id, STATE_RUNNABLE);
+	add_proc(p->id);
+
+	cur_pid = p->id; /* make it current */
 
 	/* execute a fake return from interrupt with the fake stack frame */
 	intr_ret(ifrm);
@@ -120,6 +131,8 @@ static void start_first_proc(void)
 void context_switch(int pid)
 {
 	struct process *prev, *new;
+
+	assert(get_intr_state() == 0);
 
 	if(cur_pid == pid) {
 		return;	/* nothing to be done */
@@ -141,7 +154,7 @@ void context_switch(int pid)
 	/* make sure we'll return to the correct kernel stack next time
 	 * we enter from userspace
 	 */
-	tss->esp0 = PAGE_TO_ADDR(p->kern_stack_pg) + KERN_STACK_SIZE;
+	tss->esp0 = PAGE_TO_ADDR(new->kern_stack_pg) + KERN_STACK_SIZE;
 }
 
 int get_current_pid(void)

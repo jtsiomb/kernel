@@ -42,5 +42,6 @@ set_gdt:
  * loads the TSS selector in the task register */
 	.globl set_task_reg
 set_task_reg:
+	mov 4(%esp), %eax
 	ltr 4(%esp)
 	ret

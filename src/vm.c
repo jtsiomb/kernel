@@ -129,8 +129,19 @@ int map_page(int vpage, int ppage, unsigned int attr)
 	pgidx = PAGE_TO_PGTBL_PG(vpage);
 
 	if(!(pgdir[diridx] & PG_PRESENT)) {
+		/* no page table present, we must allocate one */
 		uint32_t addr = alloc_phys_page();
-		pgdir[diridx] = addr | (attr & ATTR_PGDIR_MASK) | PG_PRESENT;
+
+		/* make sure all page directory entries in the below the kernel vm
+		 * split have the user and writable bits set, otherwise further user
+		 * mappings on the same 4mb block will be unusable in user space.
+		 */
+		unsigned int pgdir_attr = attr;
+		if(vpage < ADDR_TO_PAGE(KMEM_START)) {
+			pgdir_attr |= PG_USER | PG_WRITABLE;
+		}
+
+		pgdir[diridx] = addr | (pgdir_attr & ATTR_PGDIR_MASK) | PG_PRESENT;
 
 		pgtbl = pgon ? PGTBL(diridx) : (uint32_t*)addr;
 		memset(pgtbl, 0, PGSIZE);
@@ -265,7 +276,6 @@ int pgalloc(int num, int area)
 {
 	int intr_state, ret = -1;
 	struct page_range *node, *prev, dummy;
-	unsigned int attr = 0;	/* TODO */
 
 	intr_state = get_intr_state();
 	disable_intr();
@@ -296,6 +306,9 @@ int pgalloc(int num, int area)
 	}
 
 	if(ret >= 0) {
+		/*unsigned int attr = (area == MEM_USER) ? (PG_USER | PG_WRITABLE) : PG_GLOBAL;*/
+		unsigned int attr = (area == MEM_USER) ? (PG_USER | PG_WRITABLE) : 0;
+
 		/* allocate physical storage and map */
 		if(map_page_range(ret, num, -1, attr) == -1) {
 			ret = -1;
@@ -310,7 +323,6 @@ int pgalloc_vrange(int start, int num)
 {
 	struct page_range *node, *prev, dummy;
 	int area, intr_state, ret = -1;
-	unsigned int attr = 0;	/* TODO */
 
 	area = (start >= ADDR_TO_PAGE(KMEM_START)) ? MEM_KERNEL : MEM_USER;
 	if(area == MEM_USER && start + num > ADDR_TO_PAGE(KMEM_START)) {
@@ -376,6 +388,9 @@ int pgalloc_vrange(int start, int num)
 	}
 
 	if(ret >= 0) {
+		/*unsigned int attr = (area == MEM_USER) ? (PG_USER | PG_WRITABLE) : PG_GLOBAL;*/
+		unsigned int attr = (area == MEM_USER) ? (PG_USER | PG_WRITABLE) : 0;
+
 		/* allocate physical storage and map */
 		if(map_page_range(ret, num, -1, attr) == -1) {
 			ret = -1;
@@ -464,12 +479,11 @@ static void pgfault(int inum)
 	uint32_t fault_addr = get_fault_addr();
 
 	/* the fault occured in user space */
-	if(frm->esp < KMEM_START + 1) {
+	if(frm->err & PG_USER) {
 		int fault_page = ADDR_TO_PAGE(fault_addr);
 		struct process *proc = get_current_proc();
-		assert(proc);
-
 		printf("DBG: page fault in user space\n");
+		assert(proc);
 
 		if(frm->err & PG_PRESENT) {
 			/* it's not due to a missing page, just panic */
@@ -477,8 +491,8 @@ static void pgfault(int inum)
 		}
 
 		/* detect if it's an automatic stack growth deal */
-		if(fault_page < proc->stack_start_pg && proc->stack_start_pg - fault_page < USTACK_MAXGROW) {
-			int num_pages = proc->stack_start_pg - fault_page;
+		if(fault_page < proc->user_stack_pg && proc->user_stack_pg - fault_page < USTACK_MAXGROW) {
+			int num_pages = proc->user_stack_pg - fault_page;
 			printf("growing user (%d) stack by %d pages\n", proc->id, num_pages);
 
 			if(pgalloc_vrange(fault_page, num_pages) != fault_page) {
@@ -486,8 +500,7 @@ static void pgfault(int inum)
 				/* TODO: in the future we'd SIGSEGV the process here, for now just panic */
 				goto unhandled;
 			}
-			proc->stack_start_pg = fault_page;
-
+			proc->user_stack_pg = fault_page;
 			return;
 		}
 	}
@@ -500,8 +513,8 @@ unhandled:
 		if(frm->err & 8) {
 			printf("reserved bit set in some paging structure\n");
 		} else {
-			printf("%s protection violation ", (frm->err & PG_WRITABLE) ? "write" : "read");
-			printf("in %s mode\n", frm->err & PG_USER ? "user" : "kernel");
+			printf("%s protection violation ", (frm->err & PG_WRITABLE) ? "WRITE" : "READ");
+			printf("in %s mode\n", (frm->err & PG_USER) ? "user" : "kernel");
 		}
 	} else {
 		printf("page not present\n");
@@ -553,7 +566,7 @@ static void free_node(struct page_range *node)
 	/*printf("free_node\n");*/
 }
 
-
+#if 0
 /* clone_vm makes a copy of the current page tables, thus duplicating the
  * virtual address space.
  *
@@ -594,7 +607,7 @@ uint32_t clone_vm(void)
 	for(i=0; i<kstart_dirent; i++) {
 		if(pgdir[i] & PG_PRESENT) {
 			paddr = alloc_phys_page();
-			map_page(tblpg, ADDR_TO_PAGE(paddr), 0);
+			map_page(tblpg, ADDR_TO_PAGE(paddr), PG_USER | PG_WRITABLE);
 
 			/* copy the page table */
 			memcpy(ntbl, PGTBL(i), PGSIZE);
@@ -606,7 +619,7 @@ uint32_t clone_vm(void)
 		}
 	}
 
-	/* kernel space */
+	/* for the kernel space we'll just use the same page tables */
 	for(i=kstart_dirent; i<1024; i++) {
 		ndir[i] = pgdir[i];
 	}
@@ -622,6 +635,7 @@ uint32_t clone_vm(void)
 
 	return paddr;
 }
+#endif
 
 
 void dbg_print_vm(int area)

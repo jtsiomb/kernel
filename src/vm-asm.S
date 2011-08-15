@@ -34,6 +34,13 @@ set_pgdir_addr:
 	movl %eax, %cr3
 	ret
 
+/* get_pgdir_addr(void)
+ * returns the physical address of the page table directory (cr3) */
+	.globl get_pgdir_addr
+get_pgdir_addr:
+	movl %cr3, %eax
+	ret
+
 /* flush_tlb(void)
  * invalidates the whole TLB. entries for pages marked as global
  * are unaffected */

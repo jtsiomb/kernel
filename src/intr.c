@@ -4,6 +4,7 @@
 #include "segm.h"
 #include "asmops.h"
 #include "panic.h"
+#include "syscall.h"
 
 /* IDT gate descriptor bits */
 #define GATE_TASK		(5 << 8)
@@ -49,6 +50,7 @@ static desc_t idt[256];
 static intr_func_t intr_func[256];
 
 static struct intr_frame *cur_intr_frame;
+static int eoi_pending;
 
 
 void init_intr(void)
@@ -74,6 +76,7 @@ void init_intr(void)
 	 * setting up the maping of IRQs [0, 15] to interrupts [32, 47]
 	 */
 	init_pic(IRQ_OFFSET);
+	eoi_pending = 0;
 }
 
 /* retrieve the current interrupt frame.
@@ -98,6 +101,10 @@ void dispatch_intr(struct intr_frame frm)
 {
 	cur_intr_frame = &frm;
 
+	if(IS_IRQ(frm.inum)) {
+		eoi_pending = frm.inum;
+	}
+
 	if(intr_func[frm.inum]) {
 		intr_func[frm.inum](frm.inum);
 	} else {
@@ -107,8 +114,9 @@ void dispatch_intr(struct intr_frame frm)
 		printf("unhandled interrupt %d\n", frm.inum);
 	}
 
-	if(IS_IRQ(frm.inum)) {
-		end_of_irq(INTR_TO_IRQ(frm.inum));
+	disable_intr();
+	if(eoi_pending) {
+		end_of_irq(INTR_TO_IRQ(eoi_pending));
 	}
 }
 
@@ -149,13 +157,31 @@ static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int ty
 static void set_intr_entry(int num, void (*handler)(void))
 {
 	int type = IS_TRAP(num) ? GATE_TRAP : GATE_INTR;
-	gate_desc(idt + num, selector(SEGM_KCODE, 0), (uint32_t)handler, 0, type);
+
+	/* the syscall interrupt has to have a dpl of 3 otherwise calling it from
+	 * user space will raise a general protection exception. All the rest should
+	 * have a dpl of 0 to disallow user programs to execute critical interrupt
+	 * handlers and possibly crashing the system.
+	 */
+	int dpl = (num == SYSCALL_INT) ? 3 : 0;
+
+	gate_desc(idt + num, selector(SEGM_KCODE, 0), (uint32_t)handler, dpl, type);
 }
 
 void end_of_irq(int irq)
 {
+	int intr_state = get_intr_state();
+	disable_intr();
+
+	if(!eoi_pending) {
+		return;
+	}
+	eoi_pending = 0;
+
 	if(irq > 7) {
 		outb(OCW2_EOI, PIC2_CMD);
 	}
 	outb(OCW2_EOI, PIC1_CMD);
+
+	set_intr_state(intr_state);
 }

@@ -63,5 +63,6 @@ void dbg_print_vm(int area);
 
 /* defined in vm-asm.S */
 void set_pgdir_addr(uint32_t addr);
+uint32_t get_pgdir_addr(void);
 
 #endif	/* VM_H_ */

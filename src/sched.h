@@ -5,8 +5,9 @@
 
 void schedule(void);
 
-int add_proc(int pid, enum proc_state state);
-int block_proc(int pid);
-int unblock_proc(int pid);
+void add_proc(int pid);
+
+void wait(void *wait_addr);
+void wakeup(void *wait_addr);
 
 #endif	/* SCHED_H_ */

@@ -81,10 +81,11 @@ intr_entry_common:
 	/* if we entered from userspace ss and cs is set correctly, but
      * we must make sure all the other selectors are set to the
      * kernel data segment */
-	mov $SEGM_KDATA, %ds
-	mov $SEGM_KDATA, %es
-	mov $SEGM_KDATA, %fs
-	mov $SEGM_KDATA, %gs
+	mov %ss, %eax
+	mov %eax, %ds
+	mov %eax, %es
+	mov %eax, %fs
+	mov %eax, %gs
 	call dispatch_intr
 intr_ret_local:
 	/* restore general purpose registers */

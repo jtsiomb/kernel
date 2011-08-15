@@ -1,35 +1,36 @@
 #include <stdio.h>
+#include <assert.h>
 #include "sched.h"
 #include "proc.h"
 #include "intr.h"
 #include "asmops.h"
 #include "config.h"
 
-#define EMPTY(q)	((q).head == 0)
+#define EMPTY(q)	((q)->head == 0)
 
 struct proc_list {
 	struct process *head, *tail;
 };
 
-static void ins_back(struct proc_list *q, struct process *proc);
-static void ins_front(struct proc_list *q, struct process *proc);
-static void remove(struct proc_list *q, struct process *proc);
+static void idle_proc(void);
+static void ins_back(struct proc_list *list, struct process *proc);
+static void ins_front(struct proc_list *list, struct process *proc);
+static void remove(struct proc_list *list, struct process *proc);
+static int hash_addr(void *addr);
 
 static struct proc_list runq;
-static struct proc_list waitq;
 static struct proc_list zombieq;
+
+#define HTBL_SIZE	101
+static struct proc_list wait_htable[HTBL_SIZE];
+
 
 void schedule(void)
 {
 	disable_intr();
 
-	if(EMPTY(runq)) {
-		/* idle "process".
-		 * make sure interrupts are enabled before halting
-		 */
-		enable_intr();
-		halt_cpu();
-		printf("fuck you!\n");
+	if(EMPTY(&runq)) {
+		idle_proc();
 		/* this won't return, it'll just wake up in an interrupt later */
 	}
 
@@ -47,14 +48,13 @@ void schedule(void)
 		runq.head->ticks_left = TIMESLICE_TICKS;
 	}
 
-	/* no need to re-enable interrupts, they will be enabled with the iret */
+	/* always enter context_switch with interrupts disabled */
 	context_switch(runq.head->id);
 }
 
-int add_proc(int pid, enum proc_state state)
+void add_proc(int pid)
 {
 	int istate;
-	struct proc_list *q;
 	struct process *proc;
 
 	istate = get_intr_state();
@@ -62,85 +62,102 @@ int add_proc(int pid, enum proc_state state)
 
 	proc = get_process(pid);
 
-	q = state == STATE_RUNNABLE ? &runq : &waitq;
-
-	ins_back(q, proc);
-	proc->state = state;
-
-	set_intr_state(istate);
-	return 0;
-}
-
-int block_proc(int pid)
-{
-	int istate;
-	struct process *proc = get_process(pid);
-
-	if(proc->state != STATE_RUNNABLE) {
-		printf("block_proc: process %d not running\n", pid);
-		return -1;
-	}
-
-	istate = get_intr_state();
-	disable_intr();
-
-	remove(&runq, proc);
-	ins_back(&waitq, proc);
-	proc->state = STATE_BLOCKED;
-
-	set_intr_state(istate);
-	return 0;
-}
-
-int unblock_proc(int pid)
-{
-	int istate;
-	struct process *proc = get_process(pid);
-
-	if(proc->state != STATE_BLOCKED) {
-		printf("unblock_proc: process %d not blocked\n", pid);
-		return -1;
-	}
-
-	istate = get_intr_state();
-	disable_intr();
-
-	remove(&waitq, proc);
 	ins_back(&runq, proc);
 	proc->state = STATE_RUNNABLE;
 
 	set_intr_state(istate);
-	return 0;
+}
+
+/* block the process until we get a wakeup call for address ev */
+void wait(void *wait_addr)
+{
+	struct process *p;
+	int hash_idx;
+
+	disable_intr();
+
+	p = get_current_proc();
+	assert(p);
+
+	/* remove it from the runqueue ... */
+	remove(&runq, p);
+
+	/* and place it in the wait hash table based on sleep_addr */
+	hash_idx = hash_addr(wait_addr);
+	ins_back(wait_htable + hash_idx, p);
+
+	p->state = STATE_BLOCKED;
+	p->wait_addr = wait_addr;
+}
+
+/* wake up all the processes sleeping on this address */
+void wakeup(void *wait_addr)
+{
+	int hash_idx;
+	struct process *iter;
+	struct proc_list *list;
+
+	hash_idx = hash_addr(wait_addr);
+	list = wait_htable + hash_idx;
+
+	iter = list->head;
+	while(iter) {
+		if(iter->wait_addr == wait_addr) {
+			/* found one, remove it, and make it runnable */
+			struct process *p = iter;
+			iter = iter->next;
+
+			remove(list, p);
+			p->state = STATE_RUNNABLE;
+			ins_back(&runq, p);
+		} else {
+			iter = iter->next;
+		}
+	}
+}
+
+static void idle_proc(void)
+{
+	/* make sure we send any pending EOIs if needed.
+	 * end_of_irq will actually check if it's needed first.
+	 */
+	struct intr_frame *ifrm = get_intr_frame();
+	end_of_irq(INTR_TO_IRQ(ifrm->inum));
+
+	/* make sure interrupts are enabled before halting */
+	enable_intr();
+	halt_cpu();
 }
 
 
-static void ins_back(struct proc_list *q, struct process *proc)
+/* list operations */
+static void ins_back(struct proc_list *list, struct process *proc)
 {
-	if(EMPTY(*q)) {
-		q->head = proc;
+	if(EMPTY(list)) {
+		list->head = proc;
 	} else {
-		q->tail->next = proc;
+		list->tail->next = proc;
 	}
 
 	proc->next = 0;
-	proc->prev = q->tail;
-	q->tail = proc;
+	proc->prev = list->tail;
+	list->tail = proc;
 }
 
-static void ins_front(struct proc_list *q, struct process *proc)
+static void ins_front(struct proc_list *list, struct process *proc)
 {
-	if(EMPTY(*q)) {
-		q->tail = proc;
+	if(EMPTY(list)) {
+		list->tail = proc;
 	} else {
-		q->head->prev = proc;
+		list->head->prev = proc;
 	}
 
-	proc->next = q->head;
+	proc->next = list->head;
 	proc->prev = 0;
-	q->head = proc;
+	list->head = proc;
 }
 
-static void remove(struct proc_list *q, struct process *proc)
+static void remove(struct proc_list *list, struct process *proc)
 {
 	if(proc->prev) {
 		proc->prev->next = proc->next;
@@ -148,10 +165,15 @@ static void remove(struct proc_list *q, struct process *proc)
 	if(proc->next) {
 		proc->next->prev = proc->prev;
 	}
-	if(q->head == proc) {
-		q->head = proc->next;
+	if(list->head == proc) {
+		list->head = proc->next;
 	}
-	if(q->tail == proc) {
-		q->tail = proc->prev;
+	if(list->tail == proc) {
+		list->tail = proc->prev;
 	}
+}
+
+static int hash_addr(void *addr)
+{
+	return (uint32_t)addr % HTBL_SIZE;
 }
