@@ -24,7 +24,13 @@ void test_proc(void);
 void test_proc_end(void);
 
 static struct process proc[MAX_PROC];
-static int cur_pid;
+
+/* cur_pid:  pid of the currently executing process.
+ *           when we're in the idle process cur_pid will be 0.
+ * last_pid: pid of the last real process that was running, this should
+ *           never become 0. Essentially this defines the active kernel stack.
+ */
+static int cur_pid, last_pid;
 
 static struct task_state *tss;
 
@@ -121,7 +127,8 @@ static void start_first_proc(void)
 	/* add it to the scheduler queues */
 	add_proc(p->id);
 
-	cur_pid = p->id; /* make it current */
+	/* make it current */
+	set_current_pid(p->id);
 
 	/* execute a fake return from interrupt with the fake stack frame */
 	intr_ret(ifrm);
@@ -130,31 +137,43 @@ static void start_first_proc(void)
 
 void context_switch(int pid)
 {
-	struct process *prev, *new;
+	static struct process *prev, *new;
 
 	assert(get_intr_state() == 0);
+	assert(pid > 0);
+	assert(last_pid > 0);
 
-	if(cur_pid == pid) {
-		return;	/* nothing to be done */
-	}
-	prev = proc + cur_pid;
+	prev = proc + last_pid;
 	new = proc + pid;
 
-	/* push all registers onto the stack before switching stacks */
-	push_regs();
+	if(last_pid != pid) {
+		/* push all registers onto the stack before switching stacks */
+		push_regs();
 
-	prev->ctx.stack_ptr = switch_stack(new->ctx.stack_ptr);
+		prev->ctx.stack_ptr = switch_stack(new->ctx.stack_ptr);
 
-	/* restore registers from the new stack */
-	pop_regs();
+		/* restore registers from the new stack */
+		pop_regs();
 
-	/* switch to the new process' address space */
-	set_pgdir_addr(new->ctx.pgtbl_paddr);
+		/* switch to the new process' address space */
+		set_pgdir_addr(new->ctx.pgtbl_paddr);
 
-	/* make sure we'll return to the correct kernel stack next time
-	 * we enter from userspace
-	 */
-	tss->esp0 = PAGE_TO_ADDR(new->kern_stack_pg) + KERN_STACK_SIZE;
+		/* make sure we'll return to the correct kernel stack next time
+		 * we enter from userspace
+		 */
+		tss->esp0 = PAGE_TO_ADDR(new->kern_stack_pg) + KERN_STACK_SIZE;
+	}
+
+	set_current_pid(new->id);
+}
+
+
+void set_current_pid(int pid)
+{
+	cur_pid = pid;
+	if(pid > 0) {
+		last_pid = pid;
+	}
 }
 
 int get_current_pid(void)
@@ -164,7 +183,7 @@ int get_current_pid(void)
 
 struct process *get_current_proc(void)
 {
-	return cur_pid ? &proc[cur_pid] : 0;
+	return cur_pid > 0 ? &proc[cur_pid] : 0;
 }
 
 struct process *get_process(int pid)

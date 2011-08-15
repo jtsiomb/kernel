@@ -30,8 +30,15 @@ void schedule(void)
 	disable_intr();
 
 	if(EMPTY(&runq)) {
+		if(!get_current_proc()) {
+			/* we're already in the idle process, don't reenter it
+			 * or you'll fill up the stack very quickly.
+			 */
+			return;
+		}
+
 		idle_proc();
-		/* this won't return, it'll just wake up in an interrupt later */
+		return;
 	}
 
 	/* if the current process exhausted its timeslice,
@@ -88,6 +95,9 @@ void wait(void *wait_addr)
 
 	p->state = STATE_BLOCKED;
 	p->wait_addr = wait_addr;
+
+	/* call the scheduler to give time to another process */
+	schedule();
 }
 
 /* wake up all the processes sleeping on this address */
@@ -124,9 +134,14 @@ static void idle_proc(void)
 	struct intr_frame *ifrm = get_intr_frame();
 	end_of_irq(INTR_TO_IRQ(ifrm->inum));
 
+	set_current_pid(0);
+
 	/* make sure interrupts are enabled before halting */
-	enable_intr();
-	halt_cpu();
+	while(EMPTY(&runq)) {
+		enable_intr();
+		halt_cpu();
+		disable_intr();
+	}
 }
 
 

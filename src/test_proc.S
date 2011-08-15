@@ -10,7 +10,7 @@ test_proc:
 
 	/* --- sleep for 5 seconds --- */
 	movl $SYS_SLEEP, %eax
-	movl $5, %ebx
+	movl $3, %ebx
 	int $SYSCALL_INT
 
 	jmp test_proc

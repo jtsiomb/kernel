@@ -47,6 +47,7 @@ void init_proc(void);
 
 void context_switch(int pid);
 
+void set_current_pid(int pid);
 int get_current_pid(void);
 struct process *get_current_proc(void);
 struct process *get_process(int pid);

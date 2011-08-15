@@ -55,6 +55,9 @@ static int sys_hello(void)
 
 static int sys_sleep(int sec)
 {
-	printf("SYSCALL: sleep\n");
-	return -1;
+	printf("process %d will sleep for %d seconds\n", get_current_pid(), sec);
+
+	sleep(sec * 1000);
+
+	return 0;
 }

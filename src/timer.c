@@ -136,11 +136,10 @@ void sleep(unsigned long msec)
 static void intr_handler(int inum)
 {
 	int istate;
-	struct process *cur_proc;
 
 	nticks++;
 
-	printf("TICKS: %d\n", nticks);
+	/*printf("TICKS: %d\n", nticks);*/
 
 	istate = get_intr_state();
 	disable_intr();
@@ -149,7 +148,7 @@ static void intr_handler(int inum)
 	if(evlist) {
 		evlist->dt--;
 
-		while(evlist->dt <= 0) {
+		while(evlist && evlist->dt <= 0) {
 			struct timer_event *ev = evlist;
 			evlist = evlist->next;
 
@@ -160,12 +159,8 @@ static void intr_handler(int inum)
 		}
 	}
 
-	if((cur_proc = get_current_proc())) {
-		/* if the timeslice of this process has expire, call the scheduler */
-		if(--cur_proc->ticks_left <= 0) {
-			schedule();
-		}
-	}
+	/* call the scheduler to decide if it's time to switch processes */
+	schedule();
 
 	set_intr_state(istate);
 }
