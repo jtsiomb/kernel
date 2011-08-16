@@ -7,8 +7,10 @@
 #define SYS_EXIT		0
 #define SYS_HELLO		1
 #define SYS_SLEEP		2
+#define SYS_FORK		3
+#define SYS_GETPID		4
 
-#define NUM_SYSCALLS	3
+#define NUM_SYSCALLS	5
 
 #ifndef ASM
 void init_syscall(void);

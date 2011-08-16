@@ -136,6 +136,8 @@ static void idle_proc(void)
 
 	set_current_pid(0);
 
+	printf("idle loop is running\n");
+
 	/* make sure interrupts are enabled before halting */
 	while(EMPTY(&runq)) {
 		enable_intr();

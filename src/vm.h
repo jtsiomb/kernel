@@ -36,6 +36,13 @@
 #define PAGE_TO_PGTBL(x)		((uint32_t)(x) >> 10)
 #define PAGE_TO_PGTBL_PG(x)		((uint32_t)(x) & 0x3ff)
 
+/* argument to clone_vm */
+#define CLONE_SHARED	0
+#define CLONE_COW		1
+
+/* last argument to *_page_bit */
+#define PAGE_ONLY		0
+#define WHOLE_PATH		1
 
 void init_vm(void);
 
@@ -57,7 +64,11 @@ int pgalloc(int num, int area);
 int pgalloc_vrange(int start, int num);
 void pgfree(int start, int num);
 
-uint32_t clone_vm(void);
+uint32_t clone_vm(int cow);
+
+int get_page_bit(int pgnum, uint32_t bit, int wholepath);
+void set_page_bit(int pgnum, uint32_t bit, int wholepath);
+void clear_page_bit(int pgnum, uint32_t bit, int wholepath);
 
 void dbg_print_vm(int area);
 

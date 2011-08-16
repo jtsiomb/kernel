@@ -18,11 +18,14 @@ void panic(const char *fmt, ...)
 {
 	va_list ap;
 	struct all_registers regs;
+	uint32_t eip;
 
 	disable_intr();
 
 	memset(&regs, 0, sizeof regs);
 	get_regs(&regs);
+
+	eip = get_caller_instr_ptr();
 
 	printf("~~~~~ kernel panic ~~~~~\n");
 	va_start(ap, fmt);
@@ -32,7 +35,7 @@ void panic(const char *fmt, ...)
 	printf("\nRegisters:\n");
 	printf("eax: %x, ebx: %x, ecx: %x, edx: %x\n", regs.eax, regs.ebx, regs.ecx, regs.edx);
 	printf("esp: %x, ebp: %x, esi: %x, edi: %x\n", regs.esp, regs.ebp, regs.esi, regs.edi);
-	printf("eflags: %x\n", regs.eflags);
+	printf("eip: %x, eflags: %x\n", eip, regs.eflags);
 	printf("cr0: %x, cr1: %x, cr2: %x, cr3: %x\n", regs.cr0, regs.cr1, regs.cr2, regs.cr3);
 	printf("cs: %x (%d|%d)\n", regs.cs, regs.cs >> 3, regs.cs & 3);
 	printf("ss: %x (%d|%d)\n", regs.ss, regs.ss >> 3, regs.ss & 3);

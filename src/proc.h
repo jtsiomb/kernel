@@ -45,11 +45,18 @@ struct process {
 
 void init_proc(void);
 
+int fork(void);
+
 void context_switch(int pid);
 
 void set_current_pid(int pid);
 int get_current_pid(void);
 struct process *get_current_proc(void);
 struct process *get_process(int pid);
+
+/* defined in proc-asm.S */
+uint32_t get_instr_ptr(void);
+uint32_t get_caller_instr_ptr(void);
+void get_instr_stack_ptr(uint32_t *iptr, uint32_t *sptr);
 
 #endif	/* PROC_H_ */

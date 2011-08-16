@@ -566,7 +566,6 @@ static void free_node(struct page_range *node)
 	/*printf("free_node\n");*/
 }
 
-#if 0
 /* clone_vm makes a copy of the current page tables, thus duplicating the
  * virtual address space.
  *
@@ -574,11 +573,14 @@ static void free_node(struct page_range *node)
  * we don't want to diplicate the page tables, just point all page directory
  * entries to the same set of page tables.
  *
+ * If "cow" is non-zero it also marks the shared user-space pages as
+ * read-only, to implement copy-on-write.
+ *
  * Returns the physical address of the new page directory.
  */
-uint32_t clone_vm(void)
+uint32_t clone_vm(int cow)
 {
-	int i, dirpg, tblpg, kstart_dirent;
+	int i, j, dirpg, tblpg, kstart_dirent;
 	uint32_t paddr;
 	uint32_t *ndir, *ntbl;
 
@@ -597,7 +599,8 @@ uint32_t clone_vm(void)
 	ntbl = (uint32_t*)PAGE_TO_ADDR(tblpg);
 
 	/* we will allocate physical pages and map them to this virtual page
-	 * as needed in the loop below.
+	 * as needed in the loop below. we don't need the physical page allocated
+	 * by pgalloc.
 	 */
 	free_phys_page(virt_to_phys((uint32_t)ntbl));
 
@@ -606,10 +609,18 @@ uint32_t clone_vm(void)
 	/* user space */
 	for(i=0; i<kstart_dirent; i++) {
 		if(pgdir[i] & PG_PRESENT) {
+			/* first go through all the entries of the existing
+			 * page table and unset the writable bits.
+			 */
+			for(j=0; j<1024; j++) {
+				PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;
+			}
+
+			/* allocate a page table for the clone */
 			paddr = alloc_phys_page();
-			map_page(tblpg, ADDR_TO_PAGE(paddr), PG_USER | PG_WRITABLE);
 
 			/* copy the page table */
+			map_page(tblpg, ADDR_TO_PAGE(paddr), 0);
 			memcpy(ntbl, PGTBL(i), PGSIZE);
 
 			/* set the new page directory entry */
@@ -624,9 +635,12 @@ uint32_t clone_vm(void)
 		ndir[i] = pgdir[i];
 	}
 
+	/* we just changed all the page protection bits, so we need to flush the TLB */
+	flush_tlb();
+
 	paddr = virt_to_phys((uint32_t)ndir);
 
-	/* unmap before freeing to avoid deallocating the physical pages */
+	/* unmap before freeing the virtual pages, to avoid deallocating the physical pages */
 	unmap_page(dirpg);
 	unmap_page(tblpg);
 
@@ -635,7 +649,50 @@ uint32_t clone_vm(void)
 
 	return paddr;
 }
-#endif
+
+int get_page_bit(int pgnum, uint32_t bit, int wholepath)
+{
+	int tidx = PAGE_TO_PGTBL(pgnum);
+	int tent = PAGE_TO_PGTBL_PG(pgnum);
+	uint32_t *pgtbl = PGTBL(tidx);
+
+	if(wholepath) {
+		if((pgdir[tidx] & bit) == 0) {
+			return 0;
+		}
+	}
+
+	return pgtbl[tent] & bit;
+}
+
+void set_page_bit(int pgnum, uint32_t bit, int wholepath)
+{
+	int tidx = PAGE_TO_PGTBL(pgnum);
+	int tent = PAGE_TO_PGTBL_PG(pgnum);
+	uint32_t *pgtbl = PGTBL(tidx);
+
+	if(wholepath) {
+		pgdir[tidx] |= bit;
+	}
+	pgtbl[tent] |= bit;
+
+	flush_tlb_page(pgnum);
+}
+
+void clear_page_bit(int pgnum, uint32_t bit, int wholepath)
+{
+	int tidx = PAGE_TO_PGTBL(pgnum);
+	int tent = PAGE_TO_PGTBL_PG(pgnum);
+	uint32_t *pgtbl = PGTBL(tidx);
+
+	if(wholepath) {
+		pgdir[tidx] &= ~bit;
+	}
+
+	pgtbl[tent] &= ~bit;
+
+	flush_tlb_page(pgnum);
+}
 
 
 void dbg_print_vm(int area)

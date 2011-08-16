@@ -136,6 +136,7 @@ void sleep(unsigned long msec)
 static void intr_handler(int inum)
 {
 	int istate;
+	struct process *p;
 
 	nticks++;
 
@@ -159,7 +160,12 @@ static void intr_handler(int inum)
 		}
 	}
 
-	/* call the scheduler to decide if it's time to switch processes */
+	/* decrement the process' ticks_left and call the scheduler to decide if
+	 * it's time to switch processes
+	 */
+	if((p = get_current_proc())) {
+		p->ticks_left--;
+	}
 	schedule();
 
 	set_intr_state(istate);

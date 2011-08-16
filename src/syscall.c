@@ -12,12 +12,16 @@ static void syscall(int inum);
 static int sys_exit(int status);
 static int sys_hello(void);
 static int sys_sleep(int sec);
+static int sys_fork(void);
+static int sys_getpid(void);
 
 void init_syscall(void)
 {
 	sys_func[SYS_EXIT] = sys_exit;
 	sys_func[SYS_HELLO] = sys_hello;
 	sys_func[SYS_SLEEP] = sys_sleep;
+	sys_func[SYS_FORK] = sys_fork;
+	sys_func[SYS_GETPID] = sys_getpid;
 
 	interrupt(SYSCALL_INT, syscall);
 }
@@ -56,8 +60,19 @@ static int sys_hello(void)
 static int sys_sleep(int sec)
 {
 	printf("process %d will sleep for %d seconds\n", get_current_pid(), sec);
-
-	sleep(sec * 1000);
-
+	sleep(sec * 1000); /* timer.c */
 	return 0;
+}
+
+static int sys_fork(void)
+{
+	printf("process %d is forking\n", get_current_pid());
+	return fork(); /* proc.c */
+}
+
+static int sys_getpid(void)
+{
+	int pid = get_current_pid();
+	printf("process %d getpid\n", pid);
+	return pid;
 }

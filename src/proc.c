@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 #include "config.h"
 #include "proc.h"
 #include "tss.h"
@@ -17,7 +18,8 @@
 static void start_first_proc(void);
 
 /* defined in proc-asm.S */
-uint32_t switch_stack(uint32_t new_stack);
+uint32_t switch_stack(uint32_t new_stack, uint32_t *old_stack);
+void just_forked(void);
 
 /* defined in test_proc.S */
 void test_proc(void);
@@ -61,7 +63,6 @@ void init_proc(void)
 
 	start_first_proc(); /* XXX never returns */
 }
-
 
 static void start_first_proc(void)
 {
@@ -134,6 +135,66 @@ static void start_first_proc(void)
 	intr_ret(ifrm);
 }
 
+int fork(void)
+{
+	int i, pid;
+	struct process *p, *parent;
+
+	disable_intr();
+
+	/* find a free process slot */
+	/* TODO don't search up to MAX_PROC if uid != 0 */
+	pid = -1;
+	for(i=1; i<MAX_PROC; i++) {
+		if(proc[i].id == 0) {
+			pid = i;
+			break;
+		}
+	}
+
+	if(pid == -1) {
+		/* process table full */
+		return -EAGAIN;
+	}
+
+
+	p = proc + pid;
+	parent = get_current_proc();
+
+	/* allocate a kernel stack for the new process */
+	if((p->kern_stack_pg = pgalloc(KERN_STACK_SIZE / PGSIZE, MEM_KERNEL)) == -1) {
+		return -EAGAIN;
+	}
+	p->ctx.stack_ptr = PAGE_TO_ADDR(p->kern_stack_pg) + KERN_STACK_SIZE;
+
+	/* we need to copy the current interrupt frame to the new kernel stack so
+	 * that the new process will return to the same point as the parent, just
+	 * after the fork syscall.
+	 */
+	p->ctx.stack_ptr -= sizeof(struct intr_frame);
+	memcpy((void*)p->ctx.stack_ptr, get_intr_frame(), sizeof(struct intr_frame));
+	/* child's return from fork returns 0 */
+	((struct intr_frame*)p->ctx.stack_ptr)->regs.eax = 0;
+
+	/* XXX describe */
+	p->ctx.stack_ptr -= 4;
+	*(uint32_t*)p->ctx.stack_ptr = (uint32_t)just_forked;
+
+	/* initialize the rest of the process structure */
+	p->id = pid;
+	p->parent = parent->id;
+	p->next = p->prev = 0;
+
+	/* will be copied on write */
+	p->user_stack_pg = parent->user_stack_pg;
+
+	p->ctx.pgtbl_paddr = clone_vm(CLONE_COW);
+
+	/* done, now let's add it to the scheduler runqueue */
+	add_proc(p->id);
+
+	return pid;
+}
 
 void context_switch(int pid)
 {
@@ -147,13 +208,7 @@ void context_switch(int pid)
 	new = proc + pid;
 
 	if(last_pid != pid) {
-		/* push all registers onto the stack before switching stacks */
-		push_regs();
-
-		prev->ctx.stack_ptr = switch_stack(new->ctx.stack_ptr);
-
-		/* restore registers from the new stack */
-		pop_regs();
+		set_current_pid(new->id);
 
 		/* switch to the new process' address space */
 		set_pgdir_addr(new->ctx.pgtbl_paddr);
@@ -162,9 +217,21 @@ void context_switch(int pid)
 		 * we enter from userspace
 		 */
 		tss->esp0 = PAGE_TO_ADDR(new->kern_stack_pg) + KERN_STACK_SIZE;
-	}
 
-	set_current_pid(new->id);
+		/* push all registers onto the stack before switching stacks */
+		push_regs();
+
+		/* XXX: when switching to newly forked processes this switch_stack call
+		 * WILL NOT RETURN HERE. It will return to just_forked instead. So the
+		 * rest of this function will not run.
+		 */
+		switch_stack(new->ctx.stack_ptr, &prev->ctx.stack_ptr);
+
+		/* restore registers from the new stack */
+		pop_regs();
+	} else {
+		set_current_pid(new->id);
+	}
 }
 
 
