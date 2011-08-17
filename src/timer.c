@@ -49,7 +49,7 @@ struct timer_event {
 };
 
 
-static void intr_handler();
+static void timer_handler();
 
 
 static struct timer_event *evlist;
@@ -72,7 +72,7 @@ void init_timer(void)
 	outb((reload_count >> 8) & 0xff, PORT_DATA0);
 
 	/* set the timer interrupt handler */
-	interrupt(IRQ_TO_INTR(0), intr_handler);
+	interrupt(IRQ_TO_INTR(0), timer_handler);
 }
 
 void sleep(unsigned long msec)
@@ -133,7 +133,7 @@ void sleep(unsigned long msec)
  * every 1/250th of a second, so it must be extremely fast.
  * For now, just increasing a tick counter will suffice.
  */
-static void intr_handler(int inum)
+static void timer_handler(int inum)
 {
 	int istate;
 	struct process *p;

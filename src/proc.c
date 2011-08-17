@@ -166,7 +166,6 @@ int fork(void)
 		return -EAGAIN;
 	}
 	p->ctx.stack_ptr = PAGE_TO_ADDR(p->kern_stack_pg) + KERN_STACK_SIZE;
-
 	/* we need to copy the current interrupt frame to the new kernel stack so
 	 * that the new process will return to the same point as the parent, just
 	 * after the fork syscall.
