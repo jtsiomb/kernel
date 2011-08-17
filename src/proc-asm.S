@@ -46,6 +46,10 @@ get_caller_instr_ptr:
 	movl 4(%ebp), %eax
 	ret
 
+	/* this is where we end up when we first context_switch to a newly forked
+	 * process. The interrupt frame is already there, so we just call intr_ret
+	 * to return to user space
+	 */
 	.globl just_forked
 just_forked:
 	call intr_ret
