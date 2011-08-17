@@ -13,16 +13,21 @@ infloop:
 	movl $SYS_HELLO, %eax
 	int $SYSCALL_INT
 
-	/* --- call getpid --- */
+	/* --- call getpid ---
+	 * we'll use the process id, multiplied by two as a
+	 * sleep interval, to avoid having the two test processes
+	 * sleep for identical amounts of time.
+	 */
 	movl $SYS_GETPID, %eax
 	int $SYSCALL_INT
-	/* copy the pid to ebx to use as a sleep interval */
 	movl %eax, %ebx
 	shl $1, %ebx
 
-	/* --- sleep for 5 seconds --- */
+	/* --- sleep for (pid * 2) seconds --- 
+	 * ebx (the argument to sleep) already contains the
+	 * correct value
+	 */
 	movl $SYS_SLEEP, %eax
-	/*movl $3, %ebx*/
 	int $SYSCALL_INT
 
 	jmp infloop
