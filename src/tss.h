@@ -5,7 +5,7 @@
 
 struct task_state {
 	uint32_t prev_task;
-	uint32_t esp0, ss0;
+	uint32_t esp0, ss0;	/* we only ever set these two values */
 	uint32_t esp1, ss1;
 	uint32_t esp2, ss2;
 	uint32_t cr3;
