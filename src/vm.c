@@ -609,11 +609,13 @@ uint32_t clone_vm(int cow)
 	/* user space */
 	for(i=0; i<kstart_dirent; i++) {
 		if(pgdir[i] & PG_PRESENT) {
-			/* first go through all the entries of the existing
-			 * page table and unset the writable bits.
-			 */
-			for(j=0; j<1024; j++) {
-				PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;
+			if(cow) {
+				/* first go through all the entries of the existing
+				 * page table and unset the writable bits.
+				 */
+				for(j=0; j<1024; j++) {
+					PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;
+				}
 			}
 
 			/* allocate a page table for the clone */
@@ -635,8 +637,10 @@ uint32_t clone_vm(int cow)
 		ndir[i] = pgdir[i];
 	}
 
-	/* we just changed all the page protection bits, so we need to flush the TLB */
-	flush_tlb();
+	if(cow) {
+		/* we just changed all the page protection bits, so we need to flush the TLB */
+		flush_tlb();
+	}
 
 	paddr = virt_to_phys((uint32_t)ndir);
 
