@@ -9,7 +9,6 @@ static int (*sys_func[NUM_SYSCALLS])();
 
 static void syscall(int inum);
 
-static int sys_exit(int status);
 static int sys_hello(void);
 static int sys_sleep(int sec);
 static int sys_fork(void);
@@ -17,7 +16,6 @@ static int sys_getpid(void);
 
 void init_syscall(void)
 {
-	sys_func[SYS_EXIT] = sys_exit;
 	sys_func[SYS_HELLO] = sys_hello;
 	sys_func[SYS_SLEEP] = sys_sleep;
 	sys_func[SYS_FORK] = sys_fork;
@@ -43,12 +41,6 @@ static void syscall(int inum)
 	 * so that it'll be restored into eax before returning to userland.
 	 */
 	frm->regs.eax = sys_func[idx](frm->regs.ebx, frm->regs.ecx, frm->regs.edx, frm->regs.esi, frm->regs.edi);
-}
-
-static int sys_exit(int status)
-{
-	printf("SYSCALL: exit\n");
-	return -1;	/* not implemented yet */
 }
 
 static int sys_hello(void)
