@@ -176,7 +176,11 @@ int fork(void)
 	/* child's return from fork returns 0 */
 	((struct intr_frame*)p->ctx.stack_ptr)->regs.eax = 0;
 
-	/* XXX describe */
+	/* we also need the address of just_forked in the stack, so that switch_stacks
+	 * called from context_switch, will return to just_forked when we first switch
+	 * to a newly forked process. just_forked then just calls intr_ret to return to
+	 * userspace with the already constructed interrupt frame (see above).
+	 */
 	p->ctx.stack_ptr -= 4;
 	*(uint32_t*)p->ctx.stack_ptr = (uint32_t)just_forked;
 
