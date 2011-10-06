@@ -2,9 +2,9 @@ ifneq ($(shell uname -m), i386)
 	ccemu = -m32
 
 	ifeq ($(shell uname -s), FreeBSD)
-		ldemu = elf_i386_fbsd
+		ldemu = -m elf_i386_fbsd
 	else
-		ldemu = elf_i386
+		ldemu = -m elf_i386
 	endif
 endif
 
