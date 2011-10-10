@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include "asmops.h"
+#include "rbtree.h"
 
 #define MAX_PROC	128
 
@@ -30,6 +31,9 @@ struct process {
 	void *wait_addr;
 
 	int ticks_left;
+
+	/* process vm map */
+	struct rbtree vmmap;
 
 	/* extends of the process heap, increased by sbrk */
 

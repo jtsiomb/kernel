@@ -131,6 +131,9 @@ static void start_first_proc(void)
 	/* make it current */
 	set_current_pid(p->id);
 
+	/* build the current vm map */
+	cons_vmmap(&p->vmmap);
+
 	/* execute a fake return from interrupt with the fake stack frame */
 	intr_ret(ifrm);
 }

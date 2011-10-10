@@ -3,8 +3,10 @@
 
 #include <stdlib.h>
 #include "mboot.h"
+#include "rbtree.h"
 
 #define KMEM_START		0xc0000000
+#define KMEM_START_PAGE	ADDR_TO_PAGE(KMEM_START)
 
 /* page mapping flags */
 #define PG_PRESENT			(1 << 0)
@@ -44,6 +46,13 @@
 #define PAGE_ONLY		0
 #define WHOLE_PATH		1
 
+struct vm_page {
+	int vpage, ppage;
+	unsigned int flags;
+
+	int nref;
+};
+
 void init_vm(void);
 
 int map_page(int vpage, int ppage, unsigned int attr);
@@ -69,6 +78,9 @@ uint32_t clone_vm(int cow);
 int get_page_bit(int pgnum, uint32_t bit, int wholepath);
 void set_page_bit(int pgnum, uint32_t bit, int wholepath);
 void clear_page_bit(int pgnum, uint32_t bit, int wholepath);
+
+/* construct the vm map for the current user mappings */
+int cons_vmmap(struct rbtree *vmmap);
 
 void dbg_print_vm(int area);
 

@@ -17,7 +17,6 @@
 
 #define ATTR_PGDIR_MASK	0x3f
 #define ATTR_PGTBL_MASK	0x1ff
-#define ADDR_PGENT_MASK	0xfffff000
 
 #define PAGEFAULT		14
 
@@ -68,7 +67,7 @@ void init_vm(void)
 	map_mem_range(IDMAP_START, idmap_end - IDMAP_START, IDMAP_START, 0);
 
 	/* make the last page directory entry point to the page directory */
-	pgdir[1023] = ((uint32_t)pgdir & ADDR_PGENT_MASK) | PG_PRESENT;
+	pgdir[1023] = ((uint32_t)pgdir & PGENT_ADDR_MASK) | PG_PRESENT;
 	pgdir = (uint32_t*)PGDIR_ADDR;
 
 	/* set the page fault handler */
@@ -149,7 +148,7 @@ int map_page(int vpage, int ppage, unsigned int attr)
 		if(pgon) {
 			pgtbl = PGTBL(diridx);
 		} else {
-			pgtbl = (uint32_t*)(pgdir[diridx] & ADDR_PGENT_MASK);
+			pgtbl = (uint32_t*)(pgdir[diridx] & PGENT_ADDR_MASK);
 		}
 	}
 
@@ -614,7 +613,8 @@ uint32_t clone_vm(int cow)
 				 * page table and unset the writable bits.
 				 */
 				for(j=0; j<1024; j++) {
-					PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;
+					clear_page_bit(i * 1024 + j, PG_WRITABLE, PAGE_ONLY);
+					/*PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;*/
 				}
 			}
 
@@ -696,6 +696,40 @@ void clear_page_bit(int pgnum, uint32_t bit, int wholepath)
 	pgtbl[tent] &= ~bit;
 
 	flush_tlb_page(pgnum);
+}
+
+
+#define USER_PGDIR_ENTRIES	PAGE_TO_PGTBL(KMEM_START_PAGE)
+int cons_vmmap(struct rbtree *vmmap)
+{
+	int i, j;
+
+	rb_init(vmmap, RB_KEY_INT);
+
+	for(i=0; i<USER_PGDIR_ENTRIES; i++) {
+		if(pgdir[i] & PG_PRESENT) {
+			/* page table is present, iterate through its 1024 pages */
+			uint32_t *pgtbl = PGTBL(i);
+
+			for(j=0; j<1024; j++) {
+				if(pgtbl[j] & PG_PRESENT) {
+					struct vm_page *vmp;
+
+					if(!(vmp = malloc(sizeof *vmp))) {
+						panic("cons_vmap failed to allocate memory");
+					}
+					vmp->vpage = i * 1024 + j;
+					vmp->ppage = ADDR_TO_PAGE(pgtbl[j] & PGENT_ADDR_MASK);
+					vmp->flags = pgtbl[j] & ATTR_PGTBL_MASK;
+					vmp->nref = 1;	/* when first created assume no sharing */
+
+					rb_inserti(vmmap, vmp->ppage, vmp);
+				}
+			}
+		}
+	}
+
+	return 0;
 }
 
 
