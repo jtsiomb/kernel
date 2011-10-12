@@ -777,9 +777,13 @@ void clone_vm(struct process *pdest, struct process *psrc, int cow)
 	}
 
 	/* for the kernel space we'll just use the same page tables */
-	for(i=kstart_dirent; i<1024; i++) {
+	for(i=kstart_dirent; i<1023; i++) {
 		ndir[i] = pgdir[i];
 	}
+
+	/* also point the last page directory entry to the page directory address
+	 * since we're relying on recursive page tables
+	 */
 	paddr = virt_to_phys((uint32_t)ndir);
 	ndir[1023] = paddr | PG_PRESENT;
 
