@@ -8,6 +8,8 @@ test_proc:
 	movl $SYS_FORK, %eax
 	int $SYSCALL_INT
 
+	push %eax
+
 infloop:
 	/* --- print a message --- */
 	movl $SYS_HELLO, %eax

@@ -93,7 +93,7 @@ static void start_first_proc(void)
 	memcpy((void*)img_start_addr, test_proc, proc_size_pg * PGSIZE);
 	printf("copied init process at: %x\n", img_start_addr);
 
-	/* allocate the first page of the process stack */
+	/* allocate the first page of the user stack */
 	stack_pg = ADDR_TO_PAGE(KMEM_START) - 1;
 	if(pgalloc_vrange(stack_pg, 1) == -1) {
 		panic("failed to allocate user stack page\n");
@@ -194,7 +194,8 @@ int fork(void)
 	/* will be copied on write */
 	p->user_stack_pg = parent->user_stack_pg;
 
-	p->ctx.pgtbl_paddr = clone_vm(CLONE_COW);
+	/* clone the parent's virtual memory */
+	clone_vm(p, parent, CLONE_COW);
 
 	/* done, now let's add it to the scheduler runqueue */
 	add_proc(p->id);

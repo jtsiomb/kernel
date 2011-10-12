@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "rbtree.h"
+#include "panic.h"
 
 #define INT2PTR(x)	((void*)(x))
 #define PTR2INT(x)	((int)(x))
@@ -13,7 +14,6 @@ static int count_nodes(struct rbnode *node);
 static void del_tree(struct rbnode *node, void (*delfunc)(struct rbnode*, void*), void *cls);
 static struct rbnode *insert(struct rbtree *rb, struct rbnode *tree, void *key, void *data);
 static struct rbnode *delete(struct rbtree *rb, struct rbnode *tree, void *key);
-/*static struct rbnode *find(struct rbtree *rb, struct rbnode *node, void *key);*/
 static void traverse(struct rbnode *node, void (*func)(struct rbnode*, void*), void *cls);
 
 struct rbtree *rb_create(rb_cmp_func_t cmp_func)
@@ -57,6 +57,27 @@ int rb_init(struct rbtree *rb, rb_cmp_func_t cmp_func)
 void rb_destroy(struct rbtree *rb)
 {
 	del_tree(rb->root, rb->del, rb->del_cls);
+}
+
+void rb_clear(struct rbtree *rb)
+{
+	del_tree(rb->root, rb->del, rb->del_cls);
+	rb->root = 0;
+}
+
+int rb_copy(struct rbtree *dest, struct rbtree *src)
+{
+	struct rbnode *node;
+
+	rb_clear(dest);
+
+	rb_begin(src);
+	while((node = rb_next(src))) {
+		if(rb_insert(dest, node->key, node->data) == -1) {
+			return -1;
+		}
+	}
+	return 0;
 }
 
 void rb_set_allocator(struct rbtree *rb, rb_alloc_func_t alloc, rb_free_func_t free)
@@ -237,6 +258,9 @@ static struct rbnode *insert(struct rbtree *rb, struct rbnode *tree, void *key, 
 
 	if(!tree) {
 		struct rbnode *node = rb->alloc(sizeof *node);
+		if(!node) {
+			panic("failed to allocate tree node\n");
+		}
 		node->red = 1;
 		node->key = key;
 		node->data = data;
@@ -454,4 +478,15 @@ static struct rbnode *fix_up(struct rbnode *tree)
 		color_flip(tree);
 	}
 	return tree;
+}
+
+void rb_dbg_print_tree(struct rbtree *tree)
+{
+	struct rbnode *node;
+
+	rb_begin(tree);
+	while((node = rb_next(tree))) {
+		printf("%d ", rb_node_keyi(node));
+	}
+	printf("\n");
 }

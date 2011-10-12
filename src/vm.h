@@ -53,6 +53,8 @@ struct vm_page {
 	int nref;
 };
 
+struct process;
+
 void init_vm(void);
 
 int map_page(int vpage, int ppage, unsigned int attr);
@@ -61,8 +63,11 @@ int map_page_range(int vpg_start, int pgcount, int ppg_start, unsigned int attr)
 int unmap_page_range(int vpg_start, int pgcount);
 int map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr);
 
-int virt_to_phys_page(int vpg);
 uint32_t virt_to_phys(uint32_t vaddr);
+int virt_to_phys_page(int vpg);
+
+uint32_t virt_to_phys_proc(struct process *p, uint32_t vaddr);
+int virt_to_phys_page_proc(struct process *p, int vpg);
 
 enum {
 	MEM_KERNEL,
@@ -73,7 +78,7 @@ int pgalloc(int num, int area);
 int pgalloc_vrange(int start, int num);
 void pgfree(int start, int num);
 
-uint32_t clone_vm(int cow);
+void clone_vm(struct process *pdest, struct process *psrc, int cow);
 
 int get_page_bit(int pgnum, uint32_t bit, int wholepath);
 void set_page_bit(int pgnum, uint32_t bit, int wholepath);
@@ -81,6 +86,9 @@ void clear_page_bit(int pgnum, uint32_t bit, int wholepath);
 
 /* construct the vm map for the current user mappings */
 int cons_vmmap(struct rbtree *vmmap);
+
+struct vm_page *get_vm_page(int vpg);
+struct vm_page *get_vm_page_proc(struct process *p, int vpg);
 
 void dbg_print_vm(int area);
 

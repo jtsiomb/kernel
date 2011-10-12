@@ -38,6 +38,7 @@ uint32_t get_fault_addr(void);
 
 static void coalesce(struct page_range *low, struct page_range *mid, struct page_range *high);
 static void pgfault(int inum);
+static int copy_on_write(struct vm_page *page);
 static struct page_range *alloc_node(void);
 static void free_node(struct page_range *node);
 
@@ -109,6 +110,7 @@ int map_page(int vpage, int ppage, unsigned int attr)
 {
 	uint32_t *pgtbl;
 	int diridx, pgidx, pgon, intr_state;
+	struct process *p;
 
 	intr_state = get_intr_state();
 	disable_intr();
@@ -154,6 +156,30 @@ int map_page(int vpage, int ppage, unsigned int attr)
 
 	pgtbl[pgidx] = PAGE_TO_ADDR(ppage) | (attr & ATTR_PGTBL_MASK) | PG_PRESENT;
 	flush_tlb_page(vpage);
+
+	/* if it's a new *user* mapping, and there is a current process, update the vmmap */
+	if((attr & PG_USER) && (p = get_current_proc())) {
+		struct vm_page *page;
+
+		if(!(page = get_vm_page_proc(p, vpage))) {
+			if(!(page = malloc(sizeof *page))) {
+				panic("map_page: failed to allocate new vm_page structure");
+			}
+			page->vpage = vpage;
+			page->ppage = ppage;
+			page->flags = (attr & ATTR_PGTBL_MASK) | PG_PRESENT;
+			page->nref = 1;
+
+			rb_inserti(&p->vmmap, vpage, page);
+		} else {
+			/* otherwise just update the mapping */
+			page->ppage = ppage;
+
+			/* XXX don't touch the flags, as that's how we implement CoW
+			 * by changing the mapping without affecting the vm_page
+			 */
+		}
+	}
 
 	set_intr_state(intr_state);
 	return 0;
@@ -231,6 +257,7 @@ int map_mem_range(uint32_t vaddr, size_t sz, uint32_t paddr, unsigned int attr)
 	return map_page_range(vpg_start, num_pages, ppg_start, attr);
 }
 
+/* translate a virtual address to a physical address using the current page table */
 uint32_t virt_to_phys(uint32_t vaddr)
 {
 	int pg;
@@ -244,6 +271,7 @@ uint32_t virt_to_phys(uint32_t vaddr)
 	return pgaddr | ADDR_TO_PGOFFS(vaddr);
 }
 
+/* translate a virtual page number to a physical page number using the current page table */
 int virt_to_phys_page(int vpg)
 {
 	uint32_t pgaddr, *pgtbl;
@@ -266,6 +294,32 @@ int virt_to_phys_page(int vpg)
 	}
 	pgaddr = pgtbl[pgidx] & PGENT_ADDR_MASK;
 	return ADDR_TO_PAGE(pgaddr);
+}
+
+/* same as virt_to_phys, but uses the vm_page tree instead of the actual page table */
+uint32_t virt_to_phys_proc(struct process *p, uint32_t vaddr)
+{
+	int pg;
+	uint32_t pgaddr;
+
+	if((pg = virt_to_phys_page_proc(p, ADDR_TO_PAGE(vaddr))) == -1) {
+		return 0;
+	}
+	pgaddr = PAGE_TO_ADDR(pg);
+
+	return pgaddr | ADDR_TO_PGOFFS(vaddr);
+}
+
+/* same virt_to_phys_page, but uses the vm_page tree instead of the actual page table */
+int virt_to_phys_page_proc(struct process *p, int vpg)
+{
+	struct rbnode *node;
+	assert(p);
+
+	if(!(node = rb_findi(&p->vmmap, vpg))) {
+		return -1;
+	}
+	return ((struct vm_page*)node->data)->ppage;
 }
 
 /* allocate a contiguous block of virtual memory pages along with
@@ -481,13 +535,36 @@ static void pgfault(int inum)
 	if(frm->err & PG_USER) {
 		int fault_page = ADDR_TO_PAGE(fault_addr);
 		struct process *proc = get_current_proc();
-		printf("DBG: page fault in user space\n");
+		printf("DBG: page fault in user space (pid: %d)\n", proc->id);
 		assert(proc);
 
 		if(frm->err & PG_PRESENT) {
-			/* it's not due to a missing page, just panic */
+			/* it's not due to a missing page fetch the attributes */
+			int pgnum = ADDR_TO_PAGE(fault_addr);
+
+			if((frm->err & PG_WRITABLE) && (get_page_bit(pgnum, PG_WRITABLE, 0) == 0)) {
+				/* write permission fault might be a CoW fault or just an error
+				 * fetch the vm_page permissions to check if this is suppoosed to be
+				 * a writable page (which means we should CoW).
+				 */
+				struct vm_page *page = get_vm_page_proc(proc, pgnum);
+
+				if(page->flags & PG_WRITABLE) {
+					/* ok this is a CoW fault */
+					if(copy_on_write(page) == -1) {
+						panic("copy on write failed!");
+					}
+					return;	/* done, allow the process to restart the instruction and continue */
+				} else {
+					/* TODO eventually we'll SIGSEGV the process, for now just panic.
+					 */
+					goto unhandled;
+				}
+			}
 			goto unhandled;
 		}
+
+		/* so it's a missing page... ok */
 
 		/* detect if it's an automatic stack growth deal */
 		if(fault_page < proc->user_stack_pg && proc->user_stack_pg - fault_page < USTACK_MAXGROW) {
@@ -502,11 +579,16 @@ static void pgfault(int inum)
 			proc->user_stack_pg = fault_page;
 			return;
 		}
+
+		/* it's not a stack growth fault. since we don't do swapping yet, just
+		 * fall to unhandled and panic
+		 */
 	}
 
 unhandled:
 	printf("~~~~ PAGE FAULT ~~~~\n");
 	printf("fault address: %x\n", fault_addr);
+	printf("error code: %x\n", frm->err);
 
 	if(frm->err & PG_PRESENT) {
 		if(frm->err & 8) {
@@ -520,6 +602,54 @@ unhandled:
 	}
 
 	panic("unhandled page fault\n");
+}
+
+/* copy-on-write handler, called from pgfault above */
+static int copy_on_write(struct vm_page *page)
+{
+	uint32_t newphys;
+	struct vm_page *newpage;
+	struct rbnode *vmnode;
+	struct process *p = get_current_proc();
+
+	assert(page->nref > 0);
+
+	/* first of all check the refcount. If it's 1 then we don't need to copy
+	 * anything. This will happen when all forked processes except one have
+	 * marked this read-write again after faulting.
+	 */
+	if(page->nref == 1) {
+		set_page_bit(page->vpage, PG_WRITABLE, PAGE_ONLY);
+		return 0;
+	}
+
+	/* ok let's make a copy and mark it read-write */
+	if(!(newpage = malloc(sizeof *newpage))) {
+		printf("copy_on_write: failed to allocate new vm_page\n");
+		return -1;
+	}
+	newpage->vpage = page->vpage;
+	newpage->flags = page->flags;
+
+	if(!(newphys = alloc_phys_page())) {
+		printf("copy_on_write: failed to allocate physical page\n");
+		/* XXX proper action: SIGSEGV */
+		return -1;
+	}
+	newpage->ppage = ADDR_TO_PAGE(newphys);
+	newpage->nref = 1;
+
+	/* set the new vm_page in the process vmmap */
+	vmnode = rb_findi(&p->vmmap, newpage->vpage);
+	assert(vmnode && vmnode->data == page);	/* shouldn't be able to fail */
+	vmnode->data = newpage;
+
+	/* also update tha page table */
+	map_page(newpage->vpage, newpage->ppage, newpage->flags);
+
+	/* finally decrease the refcount at the original vm_page struct */
+	page->nref--;
+	return 0;
 }
 
 /* --- page range list node management --- */
@@ -574,14 +704,13 @@ static void free_node(struct page_range *node)
  *
  * If "cow" is non-zero it also marks the shared user-space pages as
  * read-only, to implement copy-on-write.
- *
- * Returns the physical address of the new page directory.
  */
-uint32_t clone_vm(int cow)
+void clone_vm(struct process *pdest, struct process *psrc, int cow)
 {
 	int i, j, dirpg, tblpg, kstart_dirent;
 	uint32_t paddr;
 	uint32_t *ndir, *ntbl;
+	struct rbnode *vmnode;
 
 	/* allocate the new page directory */
 	if((dirpg = pgalloc(1, MEM_KERNEL)) == -1) {
@@ -613,8 +742,10 @@ uint32_t clone_vm(int cow)
 				 * page table and unset the writable bits.
 				 */
 				for(j=0; j<1024; j++) {
-					clear_page_bit(i * 1024 + j, PG_WRITABLE, PAGE_ONLY);
-					/*PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;*/
+					if(PGTBL(i)[j] & PG_PRESENT) {
+						clear_page_bit(i * 1024 + j, PG_WRITABLE, PAGE_ONLY);
+						/*PGTBL(i)[j] &= ~(uint32_t)PG_WRITABLE;*/
+					}
 				}
 			}
 
@@ -632,17 +763,30 @@ uint32_t clone_vm(int cow)
 		}
 	}
 
+	/* make a copy of the parent's vmmap tree pointing to the same vm_pages
+	 * and increase the reference counters for all vm_pages.
+	 */
+	rb_init(&pdest->vmmap, RB_KEY_INT);
+	rb_begin(&psrc->vmmap);
+	while((vmnode = rb_next(&psrc->vmmap))) {
+		struct vm_page *pg = vmnode->data;
+		pg->nref++;
+
+		/* insert the same vm_page to the new tree */
+		rb_inserti(&pdest->vmmap, pg->vpage, pg);
+	}
+
 	/* for the kernel space we'll just use the same page tables */
 	for(i=kstart_dirent; i<1024; i++) {
 		ndir[i] = pgdir[i];
 	}
+	paddr = virt_to_phys((uint32_t)ndir);
+	ndir[1023] = paddr | PG_PRESENT;
 
 	if(cow) {
 		/* we just changed all the page protection bits, so we need to flush the TLB */
 		flush_tlb();
 	}
-
-	paddr = virt_to_phys((uint32_t)ndir);
 
 	/* unmap before freeing the virtual pages, to avoid deallocating the physical pages */
 	unmap_page(dirpg);
@@ -651,7 +795,8 @@ uint32_t clone_vm(int cow)
 	pgfree(dirpg, 1);
 	pgfree(tblpg, 1);
 
-	return paddr;
+	/* set the new page directory pointer */
+	pdest->ctx.pgtbl_paddr = paddr;
 }
 
 int get_page_bit(int pgnum, uint32_t bit, int wholepath)
@@ -723,13 +868,28 @@ int cons_vmmap(struct rbtree *vmmap)
 					vmp->flags = pgtbl[j] & ATTR_PGTBL_MASK;
 					vmp->nref = 1;	/* when first created assume no sharing */
 
-					rb_inserti(vmmap, vmp->ppage, vmp);
+					rb_inserti(vmmap, vmp->vpage, vmp);
 				}
 			}
 		}
 	}
 
 	return 0;
+}
+
+struct vm_page *get_vm_page(int vpg)
+{
+	return get_vm_page_proc(get_current_proc(), vpg);
+}
+
+struct vm_page *get_vm_page_proc(struct process *p, int vpg)
+{
+	struct rbnode *node;
+
+	if(!p || !(node = rb_findi(&p->vmmap, vpg))) {
+		return 0;
+	}
+	return node->data;
 }
 
 
