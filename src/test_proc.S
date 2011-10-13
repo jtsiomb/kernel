@@ -8,6 +8,12 @@ test_proc:
 	movl $SYS_FORK, %eax
 	int $SYSCALL_INT
 
+	/* test copy-on-write by pushing the pid to the stack
+	 * then use this value from the stack times 2 as a sleep
+     * interval in the loop.
+	 */
+	movl $SYS_GETPID, %eax
+	int $SYSCALL_INT
 	push %eax
 
 infloop:
@@ -15,20 +21,14 @@ infloop:
 	movl $SYS_HELLO, %eax
 	int $SYSCALL_INT
 
-	/* --- call getpid ---
-	 * we'll use the process id, multiplied by two as a
-	 * sleep interval, to avoid having the two test processes
-	 * sleep for identical amounts of time.
-	 */
-	movl $SYS_GETPID, %eax
-	int $SYSCALL_INT
-	movl %eax, %ebx
-	shl $1, %ebx
 
 	/* --- sleep for (pid * 2) seconds --- 
-	 * ebx (the argument to sleep) already contains the
-	 * correct value
+	 * grab the pid from the stack and shift it left to
+	 * multiply the pid by 2. Then use that as a sleep interval
+	 * in seconds.
 	 */
+	movl (%esp), %ebx
+	shl $1, %ebx
 	movl $SYS_SLEEP, %eax
 	int $SYSCALL_INT
 
