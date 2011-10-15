@@ -1,4 +1,5 @@
 ifneq ($(shell uname -m), i386)
+	# -m32 instructs the compiler to produce 32bit code
 	ccemu = -m32
 
 	ifeq ($(shell uname -s), FreeBSD)
@@ -18,11 +19,10 @@ obj = $(asmsrc:.S=.o) $(csrc:.c=.o)
 
 CC = gcc
 
-inc = -Isrc -Isrc/klibc -Isrc/boot
+inc = -Isrc -Isrc/klibc -Isrc/boot -Iinclude
 
 # -nostdinc instructs the compiler to ignore standard include directories
-# -m32 instructs the compiler to produce 32bit code (in case we have a 64bit compiler)
-CFLAGS = $(ccemu) -Wall -g -nostdinc -fno-builtin $(inc)
+CFLAGS = $(ccemu) -Wall -g -nostdinc -fno-builtin $(inc) -DKERNEL
 ASFLAGS = $(ccemu) -g -nostdinc -fno-builtin $(inc)
 
 bin = kernel.elf

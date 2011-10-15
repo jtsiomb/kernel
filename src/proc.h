@@ -27,6 +27,8 @@ struct process {
 	int id, parent;
 	enum proc_state state;
 
+	int exit_status;
+
 	/* when blocked it's waiting for a wakeup on this address */
 	void *wait_addr;
 
@@ -44,12 +46,17 @@ struct process {
 
 	struct context ctx;
 
+	struct process *child_list;
+
 	struct process *next, *prev;	/* for the scheduler queues */
+	struct process *sib_next;		/* for the sibling list */
 };
 
 void init_proc(void);
 
-int fork(void);
+int sys_fork(void);
+int sys_exit(int status);
+int sys_waitpid(int pid, int *status, int opt);
 
 void context_switch(int pid);
 
@@ -57,6 +64,9 @@ void set_current_pid(int pid);
 int get_current_pid(void);
 struct process *get_current_proc(void);
 struct process *get_process(int pid);
+
+int sys_getpid(void);
+int sys_getppid(void);
 
 /* defined in proc-asm.S */
 uint32_t get_instr_ptr(void);

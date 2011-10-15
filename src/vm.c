@@ -803,6 +803,28 @@ void clone_vm(struct process *pdest, struct process *psrc, int cow)
 	pdest->ctx.pgtbl_paddr = paddr;
 }
 
+/* cleanup_vm called by exit to clean up any memory used by the process */
+void cleanup_vm(struct process *p)
+{
+	struct rbnode *vmnode;
+
+	/* go through the vm map and reduce refcounts all around
+	 * when a ref goes to 0, free the physical page
+	 */
+	rb_begin(&p->vmmap);
+	while((vmnode = rb_next(&p->vmmap))) {
+		struct vm_page *page = vmnode->data;
+		if(--page->nref <= 0) {
+			/* free the physical page if nref goes to 0 */
+			free_phys_page(PAGE_TO_ADDR(page->ppage));
+		}
+	}
+
+	/* destroying the tree will free the nodes */
+	rb_destroy(&p->vmmap);
+}
+
+
 int get_page_bit(int pgnum, uint32_t bit, int wholepath)
 {
 	int tidx = PAGE_TO_PGTBL(pgnum);

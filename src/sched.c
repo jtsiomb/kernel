@@ -75,6 +75,20 @@ void add_proc(int pid)
 	set_intr_state(istate);
 }
 
+void remove_proc(int pid)
+{
+	int istate;
+	struct process *proc;
+
+	istate = get_intr_state();
+	disable_intr();
+
+	proc = get_process(pid);
+	remove(&runq, proc);
+
+	set_intr_state(istate);
+}
+
 /* block the process until we get a wakeup call for address ev */
 void wait(void *wait_addr)
 {

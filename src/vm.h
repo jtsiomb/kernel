@@ -78,7 +78,11 @@ int pgalloc(int num, int area);
 int pgalloc_vrange(int start, int num);
 void pgfree(int start, int num);
 
+/* don't be fooled by the fact these two accept process arguments
+ * they in fact work only for the "current" process (psrc and p)
+ */
 void clone_vm(struct process *pdest, struct process *psrc, int cow);
+void cleanup_vm(struct process *p);
 
 int get_page_bit(int pgnum, uint32_t bit, int wholepath);
 void set_page_bit(int pgnum, uint32_t bit, int wholepath);

@@ -6,6 +6,7 @@
 void schedule(void);
 
 void add_proc(int pid);
+void remove_proc(int pid);
 
 void wait(void *wait_addr);
 void wakeup(void *wait_addr);

@@ -12,6 +12,7 @@
 #include "syscall.h"
 #include "sched.h"
 #include "tss.h"
+#include "kdef.h"
 
 #define	FLAGS_INTR_BIT	(1 << 9)
 
@@ -138,7 +139,7 @@ static void start_first_proc(void)
 	intr_ret(ifrm);
 }
 
-int fork(void)
+int sys_fork(void)
 {
 	int i, pid;
 	struct process *p, *parent;
@@ -189,7 +190,12 @@ int fork(void)
 	/* initialize the rest of the process structure */
 	p->id = pid;
 	p->parent = parent->id;
+	p->child_list = 0;
 	p->next = p->prev = 0;
+
+	/* add to the child list */
+	p->sib_next = parent->child_list;
+	parent->child_list = p;
 
 	/* will be copied on write */
 	p->user_stack_pg = parent->user_stack_pg;
@@ -201,6 +207,105 @@ int fork(void)
 	add_proc(p->id);
 
 	return pid;
+}
+
+int sys_exit(int status)
+{
+	struct process *p, *child;
+
+	p = get_current_proc();
+
+	/* TODO deliver SIGCHLD to the parent */
+
+	/* find any child processes and make init adopt them */
+	child = p->child_list;
+	while(child) {
+		child->parent = 1;
+		child = child->sib_next;
+	}
+
+	cleanup_vm(p);
+
+	/* remove it from the runqueue */
+	remove_proc(p->id);
+
+	/* make it a zombie until its parent reaps it */
+	p->state = STATE_ZOMBIE;
+	p->exit_status = (status & _WSTATUS_MASK) | (_WREASON_EXITED << _WREASON_SHIFT);
+
+	/* wakeup any processes waiting for it
+	 * we're waking up the parent's address, because waitpid waits
+	 * on it's own process struct, not knowing which child will die
+	 * first.
+	 */
+	wakeup(get_process(p->parent));
+	return 0;
+}
+
+int sys_waitpid(int pid, int *status, int opt)
+{
+	struct process *p, *child;
+
+	p = get_current_proc();
+
+restart:
+	if(pid <= 0) {
+		/* search for zombie children */
+		child = p->child_list;
+		while(child) {
+			if(child->state == STATE_ZOMBIE) {
+				break;
+			}
+			child = child->sib_next;
+		}
+	} else {
+		if(!(child = get_process(pid)) || child->parent != p->id) {
+			return -ECHILD;
+		}
+		if(child->state != STATE_ZOMBIE) {
+			child = 0;
+		}
+	}
+
+	/* found ? */
+	if(child) {
+		int res;
+		struct process *prev, dummy;
+
+		if(status) {
+			*status = child->exit_status;
+		}
+		res = child->id;
+
+		/* remove it from our children list */
+		dummy.sib_next = p->child_list;
+		prev = &dummy;
+		while(prev->next) {
+			if(prev->next == child) {
+				prev->next = child->next;
+				break;
+			}
+		}
+		p->child_list = dummy.next;
+
+		/* invalidate the id */
+		child->id = 0;
+		return res;
+	}
+
+	/* not found, wait or sod off */
+	if(!(opt & WNOHANG)) {
+		/* wait on our own process struct because
+		 * we have no way of knowing which child will
+		 * die first.
+		 * exit will wakeup the parent structure...
+		 */
+		wait(p);
+		/* done waiting, restart waitpid */
+		goto restart;
+	}
+
+	return 0;	/* he's not dead jim */
 }
 
 void context_switch(int pid)
@@ -262,5 +367,25 @@ struct process *get_current_proc(void)
 
 struct process *get_process(int pid)
 {
-	return &proc[pid];
+	struct process *p = proc + pid;
+	if(p->id != pid) {
+		printf("get_process called with invalid pid: %d\n", pid);
+		return 0;
+	}
+	return p;
+}
+
+int sys_getpid(void)
+{
+	return cur_pid;
+}
+
+int sys_getppid(void)
+{
+	struct process *p = get_current_proc();
+
+	if(!p) {
+		return 0;
+	}
+	return p->parent;
 }

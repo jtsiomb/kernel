@@ -75,12 +75,19 @@ void init_timer(void)
 	interrupt(IRQ_TO_INTR(0), timer_handler);
 }
 
+int sys_sleep(int sec)
+{
+	printf("process %d will sleep for %d seconds\n", get_current_pid(), sec);
+	sleep(sec * 1000); /* timer.c */
+
+	/* TODO if interrupted, return the remaining seconds */
+	return 0;
+}
+
 void sleep(unsigned long msec)
 {
 	int ticks, tsum, istate;
 	struct timer_event *ev, *node;
-
-	printf("sleep(%lu)\n", msec);
 
 	if((ticks = MSEC_TO_TICKS(msec)) <= 0) {
 		return;
