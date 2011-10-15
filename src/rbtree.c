@@ -248,7 +248,9 @@ static void del_tree(struct rbnode *node, rb_del_func_t delfunc, void *cls)
 	del_tree(node->left, delfunc, cls);
 	del_tree(node->right, delfunc, cls);
 
-	delfunc(node, cls);
+	if(delfunc) {
+		delfunc(node, cls);
+	}
 	free(node);
 }
 
