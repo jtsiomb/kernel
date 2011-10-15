@@ -16,6 +16,9 @@ test_proc:
 	int $SYSCALL_INT
 	push %eax
 
+	/* this will count the iterations */
+	xor %ecx, %ecx
+
 infloop:
 	/* --- print a message --- */
 	movl $SYS_HELLO, %eax
@@ -32,7 +35,24 @@ infloop:
 	movl $SYS_SLEEP, %eax
 	int $SYSCALL_INT
 
+	inc %ecx
+
+	/* let process 2 quit after 2 iterations */
+	cmpl $2, (%esp)
+	jne 1f
+	cmpl $2, %ecx
+	je exit_proc
+
+1:
 	jmp infloop
+
+exit_proc:
+	movl $SYS_EXIT, %eax
+	movl $0, %ebx
+	int $SYSCALL_INT
+
+	/* shouldn't reach this, trap otherwise */
+	int $3
 
 	.globl test_proc_end
 test_proc_end:

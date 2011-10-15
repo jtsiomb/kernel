@@ -215,6 +215,8 @@ int sys_exit(int status)
 
 	p = get_current_proc();
 
+	printf("process %d exit(%d)\n", p->id, status);
+
 	/* TODO deliver SIGCHLD to the parent */
 
 	/* find any child processes and make init adopt them */
