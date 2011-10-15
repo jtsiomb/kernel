@@ -814,6 +814,12 @@ void cleanup_vm(struct process *p)
 	rb_begin(&p->vmmap);
 	while((vmnode = rb_next(&p->vmmap))) {
 		struct vm_page *page = vmnode->data;
+
+		/* skip kernel pages obviously */
+		if(!(page->flags & PG_USER)) {
+			continue;
+		}
+
 		if(--page->nref <= 0) {
 			/* free the physical page if nref goes to 0 */
 			free_phys_page(PAGE_TO_ADDR(page->ppage));
