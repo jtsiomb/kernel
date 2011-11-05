@@ -93,7 +93,7 @@ void init_vm(void)
 	pglist[MEM_USER]->end = kmem_start_pg;
 	pglist[MEM_USER]->next = 0;
 
-	/* temporaroly map something into every 1024th page of the kernel address
+	/* temporarily map something into every 1024th page of the kernel address
 	 * space to force pre-allocation of all the kernel page-tables
 	 */
 	for(i=kmem_start_pg; i<pgtbl_base_pg; i+=1024) {
@@ -607,7 +607,7 @@ unhandled:
 /* copy-on-write handler, called from pgfault above */
 static int copy_on_write(struct vm_page *page)
 {
-	uint32_t newphys;
+	int tmpvpg;
 	struct vm_page *newpage;
 	struct rbnode *vmnode;
 	struct process *p = get_current_proc();
@@ -631,13 +631,18 @@ static int copy_on_write(struct vm_page *page)
 	newpage->vpage = page->vpage;
 	newpage->flags = page->flags;
 
-	if(!(newphys = alloc_phys_page())) {
+	if(!(tmpvpg = pgalloc(1, MEM_KERNEL))) {
 		printf("copy_on_write: failed to allocate physical page\n");
 		/* XXX proper action: SIGSEGV */
 		return -1;
 	}
-	newpage->ppage = ADDR_TO_PAGE(newphys);
+	newpage->ppage = virt_to_phys_page(tmpvpg);
 	newpage->nref = 1;
+
+	/* do the copy */
+	memcpy((void*)PAGE_TO_ADDR(tmpvpg), (void*)PAGE_TO_ADDR(page->vpage), PGSIZE);
+	unmap_page(tmpvpg);
+	pgfree(tmpvpg, 1);
 
 	/* set the new vm_page in the process vmmap */
 	vmnode = rb_findi(&p->vmmap, newpage->vpage);

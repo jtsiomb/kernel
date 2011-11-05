@@ -5,6 +5,7 @@
 #include "asmops.h"
 #include "segm.h"
 #include "intr.h"
+#include "ata.h"
 #include "rtc.h"
 #include "timer.h"
 #include "mem.h"
@@ -34,6 +35,9 @@ void kmain(struct mboot_info *mbinf)
 	init_mem(mbinf);
 	/* initialize paging and the virtual memory manager */
 	init_vm();
+
+	/* initialize ATA disks */
+	init_ata();
 
 	/* initialize the timer and RTC */
 	init_timer();
