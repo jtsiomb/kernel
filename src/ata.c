@@ -55,6 +55,7 @@ static inline uint16_t read_reg16(struct device *dev, int reg);
 static inline void write_reg8(struct device *dev, int reg, uint8_t val);
 static inline void write_reg16(struct device *dev, int reg, uint16_t val);
 static void ata_intr(int inum);
+static void *atastr(void *res, void *src, int n);
 static char *size_str(uint64_t nsect, char *buf);
 
 /* last drive selected on each bus */
@@ -125,13 +126,8 @@ static int identify(struct device *dev, int iface, int id)
 	read_data(dev, info);
 
 	/* print model and serial */
-	memcpy(textbuf, info + 27, 40);
-	textbuf[40] = 0;
-	printf("- found ata drive (%d,%d): %s\n", dev->iface, dev->id, textbuf);
-
-	memcpy(textbuf, info + 10, 20);
-	textbuf[20] = 0;
-	printf("  s/n: %s\n", textbuf);
+	printf("- found ata drive (%d,%d): %s\n", dev->iface, dev->id, atastr(textbuf, info + 27, 40));
+	printf("  s/n: %s\n", atastr(textbuf, info + 10, 20));
 
 	dev->nsect_lba = *(uint32_t*)(info + 60);
 	dev->nsect_lba48 = *(uint64_t*)(info + 100) & 0xffffffffffffull;
@@ -229,6 +225,20 @@ static inline void write_reg16(struct device *dev, int reg, uint16_t val)
 static void ata_intr(int inum)
 {
 	printf("ATA interrupt\n");
+}
+
+static void *atastr(void *res, void *src, int n)
+{
+	int i;
+	uint16_t *sptr = (uint16_t*)src;
+	char *dptr = res;
+
+	for(i=0; i<n/2; i++) {
+		*dptr++ = (*sptr & 0xff00) >> 8;
+		*dptr++ = *sptr++ & 0xff;
+	}
+	*dptr = 0;
+	return res;
 }
 
 static char *size_str(uint64_t nsect, char *buf)
