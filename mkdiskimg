@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# mkdiskimg - prepare a disk image for the kernel
+# usage: mkdiskimg [size in mb, default: 40]
+
+imgfile=disk.img
+if [ -e $imgfile ]; then
+	echo "file '$imgfile' exists, will not overwrite, delete it first" >&2
+	exit 1
+fi
+
+if [ -n "$1" ]; then
+	sizemb=$1
+else
+	sizemb=40
+fi
+
+# create the image file
+echo 'creating image file ...'
+dd if=/dev/zero of=$imgfile bs=1M count=$sizemb || exit 1
+
+# create partition table
+if ! sfdisk --version | grep linux; then
+	echo "failed to find the linux sfdisk program."
+	echo "please install it, or create a partition on the disk image ($imgfile) manually."
+	exit 0
+fi
+
+echo 'creating partition table with a single partition ...'
+sfdisk -q $imgfile <<EOF
+,,cc
+EOF
+if [ $? != 0 ]; then
+	echo 'failed to create partition' >&2
+	exit 1
+fi
+
+echo
+echo 'done. happy hacking!'

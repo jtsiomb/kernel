@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <inttypes.h>
 #include <assert.h>
 #include "ata.h"
@@ -126,8 +127,8 @@ static int identify(struct device *dev, int iface, int id)
 	read_data(dev, info);
 
 	/* print model and serial */
-	printf("- found ata drive (%d,%d): %s\n", dev->iface, dev->id, atastr(textbuf, info + 27, 40));
-	printf("  s/n: %s\n", atastr(textbuf, info + 10, 20));
+	printf("ata%d: %s", (dev->iface << 1) | dev->id, atastr(textbuf, info + 27, 40));
+	printf(" [s/n: %s]", atastr(textbuf, info + 10, 20));
 
 	dev->nsect_lba = *(uint32_t*)(info + 60);
 	dev->nsect_lba48 = *(uint64_t*)(info + 100) & 0xffffffffffffull;
@@ -143,7 +144,7 @@ static int identify(struct device *dev, int iface, int id)
 	} else {
 		size_str(dev->nsect_lba, textbuf);
 	}
-	printf("  size: %s\n", textbuf);
+	printf(" size: %s\n", textbuf);
 
 	free(info);
 	return 0;
@@ -237,7 +238,9 @@ static void *atastr(void *res, void *src, int n)
 		*dptr++ = (*sptr & 0xff00) >> 8;
 		*dptr++ = *sptr++ & 0xff;
 	}
-	*dptr = 0;
+
+	while(isspace(*--dptr));
+	*++dptr = 0;
 	return res;
 }
 
