@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "asmops.h"
+#include "proc.h"
 
 struct all_registers {
 	uint32_t eax, ebx, ecx, edx;
