@@ -1,4 +1,6 @@
 #!/bin/sh
 
-qemu -kernel kernel.elf -s -S &
+cmdline=`cat run | grep qemu | sed s/^qemu//`
+
+qemu -s -S $cmdline &
 gdb

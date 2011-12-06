@@ -44,7 +44,7 @@ void kmain(struct mboot_info *mbinf)
 	init_rtc();
 
 	/* create the first process and switch to it */
-	init_proc();
+	/*init_proc();*/
 
 	/* XXX unreachable */
 
