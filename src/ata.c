@@ -245,14 +245,16 @@ static char *size_str(uint64_t nsect, char *buf)
 {
 	static const char *suffix[] = {"kb", "mb", "gb", "tb", "pb", 0};
 	int i;
+	unsigned int rem;
 
 	/* start with kilobytes */
 	nsect /= 2;
 
 	for(i=0; nsect >= 1024 && suffix[i + 1]; i++) {
+		rem = nsect % 1024;
 		nsect /= 1024;
 	}
-	sprintf(buf, "%u%s", (unsigned int)nsect, suffix[i]);
+	sprintf(buf, "%u.%u%s", (unsigned int)nsect, 100 * rem / 1024, suffix[i]);
 	return buf;
 }
 
