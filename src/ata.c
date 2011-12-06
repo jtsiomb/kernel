@@ -252,7 +252,7 @@ static char *size_str(uint64_t nsect, char *buf)
 	for(i=0; nsect >= 1024 && suffix[i + 1]; i++) {
 		nsect /= 1024;
 	}
-	sprintf(buf, "%u %s", (unsigned int)nsect, suffix[i]);
+	sprintf(buf, "%u%s", (unsigned int)nsect, suffix[i]);
 	return buf;
 }
 
