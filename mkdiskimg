@@ -1,5 +1,10 @@
 #!/bin/sh
 
+SUDO=${SUDO:-sudo}
+if [ `id -u` = 0 ]; then
+	unset SUDO
+fi
+
 # mkdiskimg - prepare a disk image for the kernel
 # usage: mkdiskimg [size in mb, default: 40]
 
@@ -28,19 +33,25 @@ EOF
 
 mkpart_fbsd()
 {
-	fdisk -f - $imgfile <<EOF
+	devfile=`$SUDO mdconfig -a -t vnode -f $imgfile`
+	if [ $? != 0 ]; then
+		echo "failed to map $imgfile as a memory device, need root" >&2
+		exit 1
+	fi
+
+	$SUDO fdisk -q -f - /dev/$devfile <<EOF
 p 1 204 * *
 EOF
+	$SUDO mdconfig -d -u $devfile
 }
-
-sys=`uname -s`
 
 # create partition table
 echo 'creating partition table with a single partition ...'
+sys=`uname -s`
 if [ $sys = Linux ]; then
 	mkpart_linux
-#elif [ $sys = FreeBSD ]; then
-#	mkpart_fbsd
+elif [ $sys = FreeBSD ]; then
+	mkpart_fbsd
 else
 	echo "don't know how to partition the image on your system."
 	echo "please create a partition in the disk image ($imgfile) manually."
