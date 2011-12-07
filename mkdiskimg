@@ -19,17 +19,34 @@ fi
 echo 'creating image file ...'
 dd if=/dev/zero of=$imgfile bs=1M count=$sizemb || exit 1
 
-# create partition table
-if ! sfdisk --version | grep linux; then
-	echo "failed to find the linux sfdisk program."
-	echo "please install it, or create a partition on the disk image ($imgfile) manually."
-	exit 0
-fi
-
-echo 'creating partition table with a single partition ...'
-sfdisk -q $imgfile <<EOF
+mkpart_linux()
+{
+	sfdisk -q $imgfile <<EOF
 ,,cc
 EOF
+}
+
+mkpart_fbsd()
+{
+	fdisk -f - $imgfile <<EOF
+p 1 204 * *
+EOF
+}
+
+sys=`uname -s`
+
+# create partition table
+echo 'creating partition table with a single partition ...'
+if [ $sys = Linux ]; then
+	mkpart_linux
+#elif [ $sys = FreeBSD ]; then
+#	mkpart_fbsd
+else
+	echo "don't know how to partition the image on your system."
+	echo "please create a partition in the disk image ($imgfile) manually."
+	exit 0
+fi
+	
 if [ $? != 0 ]; then
 	echo 'failed to create partition' >&2
 	exit 1
