@@ -7,6 +7,7 @@
 #include "ata.h"
 #include "intr.h"
 #include "asmops.h"
+#include "sched.h"
 #include "mutex.h"
 
 /* registers */
@@ -64,6 +65,7 @@ static inline void write_reg16(struct device *dev, int reg, uint16_t val);
 static void ata_intr(int inum);
 static void *atastr(void *res, void *src, int n);
 static char *size_str(uint64_t nsect, char *buf);
+static void print_error(int devid, int wr, uint32_t high, uint32_t low, unsigned char err);
 
 /* last drive selected on each bus */
 static int drvsel[2] = {-1, -1};
@@ -107,8 +109,8 @@ void init_ata(void)
 int ata_read_pio(int devno, uint64_t sect, void *buf)
 {
 	int cmd, st, res = -1;
-	uint32_t sect_low;
-	struct device *dev = device + devno;
+	uint32_t sect_low, sect_high;
+	struct device *dev = devices + devno;
 
 	if(dev->id == -1) {
 		return -1;
@@ -123,7 +125,7 @@ int ata_read_pio(int devno, uint64_t sect, void *buf)
 
 	/* LBA48 requires the high-order bits first */
 	if(sect >= dev->nsect_lba) {
-		uint32_t sect_high = (uint32_t)(sect >> 24);
+		sect_high = (uint32_t)(sect >> 24);
 		sect_low = (uint32_t)sect & 0xffffff;
 
 		if(sect >= dev->nsect_lba48) {
@@ -137,14 +139,15 @@ int ata_read_pio(int devno, uint64_t sect, void *buf)
 		write_reg8(dev, REG_LBA2, (sect_high >> 16) & 0xff);
 	} else {
 		cmd = CMD_READ;
-		sect_low = (uint32_t)sect & 0xffffff;
+		sect_high = 0;
+		sect_low = (uint32_t)sect & 0xfffffff;
 	}
 
 	write_reg8(dev, REG_COUNT, 1);
 	write_reg8(dev, REG_LBA0, sect_low & 0xff);
 	write_reg8(dev, REG_LBA1, (sect_low >> 8) & 0xff);
 	write_reg8(dev, REG_LBA2, (sect_low >> 16) & 0xff);
-	write_reg8(dev, REG_DEVICE, ((sect_low >> 24) & 0xf) | DEV_LBA | DEV_SEL(dev->id))
+	write_reg8(dev, REG_DEVICE, ((sect_low >> 24) & 0xf) | DEV_LBA | DEV_SEL(dev->id));
 	/* execute */
 	write_reg8(dev, REG_CMD, cmd);
 
@@ -154,10 +157,14 @@ int ata_read_pio(int devno, uint64_t sect, void *buf)
 			/* also sleep on the mutex if we're called from userspace */
 			wait(&pending);
 		}
-	} while((st = read_reg8(dev, REG_ALTSTAT)) & (ST_DRQ | ST_ERR) == 0);
+	} while(((st = read_reg8(dev, REG_ALTSTAT)) & (ST_DRQ | ST_ERR)) == 0);
 
 	if(st & ST_ERR) {
-		print_error();
+		//print_error(int devid, int wr, uint32_t high, uint32_t low, unsigned char err);
+		unsigned char err;
+
+		err = read_reg8(dev, REG_ERROR);
+		print_error(devno, 0, sect_high, sect_low, err);
 		goto end;
 	}
 
@@ -173,9 +180,10 @@ end:
 
 int ata_write_pio(int devno, uint64_t sect, void *buf)
 {
-	if(dev[devno].id == -1) {
+	if(devices[devno].id == -1) {
 		return -1;
 	}
+	return -1;
 }
 
 static int identify(struct device *dev, int iface, int id)
@@ -352,3 +360,24 @@ static char *size_str(uint64_t nsect, char *buf)
 	return buf;
 }
 
+#define ERR_NM		(1 << 1)
+#define ERR_ABRT	(1 << 2)
+#define ERR_MCR		(1 << 3)
+#define ERR_IDNF	(1 << 4)
+#define ERR_MC		(1 << 5)
+#define ERR_UNC		(1 << 6)
+
+static void print_error(int devid, int wr, uint32_t high, uint32_t low, unsigned char err)
+{
+	printf("ata%d %s %serror ", devid, wr ? "write" : "read", err & ERR_UNC ? "uncorrectable " : "");
+	printf("at sector %x%x: ", high, low);
+
+	if(err & ERR_ABRT)
+		printf("abort ");
+	if(err & ERR_IDNF)
+		printf("invalid address ");
+	if(err & ERR_NM)
+		printf("no media ");
+
+	printf("(%x)\n", (unsigned int)err);
+}
