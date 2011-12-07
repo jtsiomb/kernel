@@ -1,6 +1,8 @@
 #ifndef RBTREE_H_
 #define RBTREE_H_
 
+#include <stdlib.h>	/* for size_t */
+
 struct rbtree;
 struct rbnode;
 

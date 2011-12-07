@@ -7,6 +7,7 @@
 #include "ata.h"
 #include "intr.h"
 #include "asmops.h"
+#include "mutex.h"
 
 /* registers */
 #define REG_DATA		0	/* R/W */
@@ -31,9 +32,14 @@
 
 /* device select bit in control register */
 #define DEV_SEL(x)		(((x) & 1) << 4)
+#define DEV_LBA			(1 << 6)
 
 /* ATA commands */
 #define CMD_IDENTIFY	0xec
+#define CMD_READ		0x20
+#define CMD_READ48		0x24
+#define CMD_WRITE		0x30
+#define CMD_WRITE48		0x34
 
 
 struct device {
@@ -69,7 +75,14 @@ static int drvsel[2] = {-1, -1};
  */
 #define MAX_IFACES		2
 #define MAX_DEV			(MAX_IFACES * 2)
-static struct device dev[MAX_DEV];
+static struct device devices[MAX_DEV];
+
+static int use_irq;
+
+/* This serves as a sync point for I/O. While the mutex is held,
+ * some process is doing I/O and all the others must wait.
+ */
+static mutex_t pending;
 
 
 void init_ata(void)
@@ -82,9 +95,86 @@ void init_ata(void)
 		int iface = i / MAX_IFACES;
 		int id = i % MAX_IFACES;
 
-		if(identify(dev + i, iface, id) == -1) {
-			dev[i].id = -1;
+		if(identify(devices + i, iface, id) == -1) {
+			devices[i].id = -1;
 		}
+	}
+
+	/* init code done, from now on use the irq sleep/wakeup mechanism */
+	use_irq = 1;
+}
+
+int ata_read_pio(int devno, uint64_t sect, void *buf)
+{
+	int cmd, st, res = -1;
+	uint32_t sect_low;
+	struct device *dev = device + devno;
+
+	if(dev->id == -1) {
+		return -1;
+	}
+
+	if(use_irq) {
+		/* wait for the interface to become available */
+		mutex_lock(&pending);
+	}
+
+	select_dev(dev);
+
+	/* LBA48 requires the high-order bits first */
+	if(sect >= dev->nsect_lba) {
+		uint32_t sect_high = (uint32_t)(sect >> 24);
+		sect_low = (uint32_t)sect & 0xffffff;
+
+		if(sect >= dev->nsect_lba48) {
+			goto end;
+		}
+		cmd = CMD_READ48;
+
+		write_reg8(dev, REG_COUNT, 0);
+		write_reg8(dev, REG_LBA0, sect_high & 0xff);
+		write_reg8(dev, REG_LBA1, (sect_high >> 8) & 0xff);
+		write_reg8(dev, REG_LBA2, (sect_high >> 16) & 0xff);
+	} else {
+		cmd = CMD_READ;
+		sect_low = (uint32_t)sect & 0xffffff;
+	}
+
+	write_reg8(dev, REG_COUNT, 1);
+	write_reg8(dev, REG_LBA0, sect_low & 0xff);
+	write_reg8(dev, REG_LBA1, (sect_low >> 8) & 0xff);
+	write_reg8(dev, REG_LBA2, (sect_low >> 16) & 0xff);
+	write_reg8(dev, REG_DEVICE, ((sect_low >> 24) & 0xf) | DEV_LBA | DEV_SEL(dev->id))
+	/* execute */
+	write_reg8(dev, REG_CMD, cmd);
+
+	/* wait for the data to become available */
+	do {
+		if(use_irq) {
+			/* also sleep on the mutex if we're called from userspace */
+			wait(&pending);
+		}
+	} while((st = read_reg8(dev, REG_ALTSTAT)) & (ST_DRQ | ST_ERR) == 0);
+
+	if(st & ST_ERR) {
+		print_error();
+		goto end;
+	}
+
+	/* read the data and we're done */
+	read_data(dev, buf);
+	res = 0;
+end:
+	if(use_irq) {
+		mutex_unlock(&pending);
+	}
+	return res;
+}
+
+int ata_write_pio(int devno, uint64_t sect, void *buf)
+{
+	if(dev[devno].id == -1) {
+		return -1;
 	}
 }
 
@@ -106,8 +196,6 @@ static int identify(struct device *dev, int iface, int id)
 	}
 
 	select_dev(dev);
-	/* wait a bit to allow the device time to respond */
-	iodelay(); iodelay(); iodelay(); iodelay();
 
 	write_reg8(dev, REG_CMD, CMD_IDENTIFY);
 
@@ -161,6 +249,9 @@ static void select_dev(struct device *dev)
 
 	/* set the correct device bit to the device register */
 	write_reg8(dev, REG_DEVICE, DEV_SEL(dev->id));
+
+	/* wait a bit to allow the device time to respond */
+	iodelay(); iodelay(); iodelay(); iodelay();
 }
 
 static int wait_busy(struct device *dev)
