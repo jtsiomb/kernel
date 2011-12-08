@@ -1,25 +1,50 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 #include "fs.h"
 #include "ata.h"
 #include "part.h"
 #include "panic.h"
 
-#define PART_TYPE	0xcc
+#define MAGIC	0xccf5ccf5
+#define BLKSZ	1024
 
-static int find_rootfs(int *dev, struct partition *part);
+typedef uint32_t blkid;
+
+struct superblock {
+	uint32_t magic;
+
+	blkid istart;
+	unsigned int icount;
+
+	blkid dstart;
+	unsigned int dcount;
+};
+
+struct filesys {
+	int dev;
+	struct partition part;
+
+	struct superblock *sb;
+};
+
+static int find_rootfs(struct filesys *fs);
 
 /* root device & partition */
-static int rdev;
-static struct partition rpart;
+static struct filesys root;
 
 void init_fs(void)
 {
-	if(find_rootfs(&rdev, &rpart) == -1) {
+	root.sb = malloc(512);
+	assert(root.sb);
+
+	if(find_rootfs(&root) == -1) {
 		panic("can't find root filesystem\n");
 	}
 }
 
-static int find_rootfs(int *dev, struct partition *part)
+#define PART_TYPE	0xcc
+static int find_rootfs(struct filesys *fs)
 {
 	int i, num_dev, partid;
 	struct partition *plist, *p;
@@ -31,11 +56,17 @@ static int find_rootfs(int *dev, struct partition *part)
 		partid = 0;
 		while(p) {
 			if(get_part_type(p) == PART_TYPE) {
-				/* found it! */
-				printf("using ata%dp%d\n", i, partid);
-				*dev = i;
-				*part = *p;
-				return 0;
+				/* found the correct partition, now read the superblock
+				 * and make sure it's got the correct magic id
+				 */
+				ata_read_pio(i, p->start_sect + 2, fs->sb);
+
+				if(fs->sb->magic == MAGIC) {
+					printf("found root ata%dp%d\n", i, partid);
+					fs->dev = i;
+					fs->part = *p;
+					return 0;
+				}
 			}
 			p = p->next;
 			partid++;

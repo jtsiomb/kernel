@@ -53,11 +53,13 @@ struct device {
 };
 
 
+static int readwrite_pio(int devno, uint64_t sect, void *buf, void (*rwdata)(struct device*, void*));
 static int identify(struct device *dev, int iface, int id);
 static void select_dev(struct device *dev);
 static int wait_busy(struct device *dev);
 static int wait_drq(struct device *dev);
 static void read_data(struct device *dev, void *buf);
+static void write_data(struct device *dev, void *buf);
 static inline uint8_t read_reg8(struct device *dev, int reg);
 static inline uint16_t read_reg16(struct device *dev, int reg);
 static inline void write_reg8(struct device *dev, int reg, uint8_t val);
@@ -109,6 +111,16 @@ int ata_num_devices(void)
 }
 
 int ata_read_pio(int devno, uint64_t sect, void *buf)
+{
+	return readwrite_pio(devno, sect, buf, read_data);
+}
+
+int ata_write_pio(int devno, uint64_t sect, void *buf)
+{
+	return readwrite_pio(devno, sect, buf, write_data);
+}
+
+static int readwrite_pio(int devno, uint64_t sect, void *buf, void (*rwdata)(struct device*, void*))
 {
 	int use_irq, cmd, st, res = -1;
 	uint32_t sect_low, sect_high;
@@ -171,22 +183,14 @@ int ata_read_pio(int devno, uint64_t sect, void *buf)
 		goto end;
 	}
 
-	/* read the data and we're done */
-	read_data(dev, buf);
+	/* read/write the data and we're done */
+	rwdata(dev, buf);
 	res = 0;
 end:
 	if(use_irq) {
 		mutex_unlock(&pending);
 	}
 	return res;
-}
-
-int ata_write_pio(int devno, uint64_t sect, void *buf)
-{
-	if(devices[devno].id == -1) {
-		return -1;
-	}
-	return -1;
 }
 
 static int identify(struct device *dev, int iface, int id)
@@ -298,6 +302,20 @@ static void read_data(struct device *dev, void *buf)
 	/* ready to transfer */
 	for(i=0; i<256; i++) {
 		*ptr++ = read_reg16(dev, REG_DATA);
+	}
+}
+
+static void write_data(struct device *dev, void *buf)
+{
+	int i;
+	uint16_t *ptr = buf;
+
+	/* wait for the data request from the device */
+	wait_drq(dev);
+
+	/* ready to transfer */
+	for(i=0; i<256; i++) {
+		write_reg16(dev, REG_DATA, *ptr++);
 	}
 }
 
