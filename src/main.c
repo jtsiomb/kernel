@@ -6,6 +6,7 @@
 #include "segm.h"
 #include "intr.h"
 #include "ata.h"
+#include "fs.h"
 #include "rtc.h"
 #include "timer.h"
 #include "mem.h"
@@ -38,6 +39,8 @@ void kmain(struct mboot_info *mbinf)
 
 	/* initialize ATA disks */
 	init_ata();
+	/* initialize the filesystem */
+	init_fs();
 
 	/* initialize the timer and RTC */
 	init_timer();

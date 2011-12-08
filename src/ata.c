@@ -78,8 +78,7 @@ static int drvsel[2] = {-1, -1};
 #define MAX_IFACES		2
 #define MAX_DEV			(MAX_IFACES * 2)
 static struct device devices[MAX_DEV];
-
-static int use_irq;
+static int ndev;
 
 /* This serves as a sync point for I/O. While the mutex is held,
  * some process is doing I/O and all the others must wait.
@@ -93,28 +92,32 @@ void init_ata(void)
 
 	interrupt(IRQ_TO_INTR(15), ata_intr);
 
+	ndev = 0;
 	for(i=0; i<MAX_DEV; i++) {
 		int iface = i / MAX_IFACES;
 		int id = i % MAX_IFACES;
 
-		if(identify(devices + i, iface, id) == -1) {
-			devices[i].id = -1;
+		if(identify(devices + ndev, iface, id) == 0) {
+			ndev++;
 		}
 	}
+}
 
-	/* init code done, from now on use the irq sleep/wakeup mechanism */
-	use_irq = 1;
+int ata_num_devices(void)
+{
+	return ndev;
 }
 
 int ata_read_pio(int devno, uint64_t sect, void *buf)
 {
-	int cmd, st, res = -1;
+	int use_irq, cmd, st, res = -1;
 	uint32_t sect_low, sect_high;
 	struct device *dev = devices + devno;
 
 	if(dev->id == -1) {
 		return -1;
 	}
+	use_irq = get_current_proc() != 0;
 
 	if(use_irq) {
 		/* wait for the interface to become available */
