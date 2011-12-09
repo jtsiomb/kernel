@@ -165,6 +165,9 @@ int sys_fork(void)
 	p = proc + pid;
 	parent = get_current_proc();
 
+	/* copy file table */
+	memcpy(p->files, parent->files, sizeof p->files);
+
 	/* allocate a kernel stack for the new process */
 	if((p->kern_stack_pg = pgalloc(KERN_STACK_SIZE / PGSIZE, MEM_KERNEL)) == -1) {
 		return -EAGAIN;

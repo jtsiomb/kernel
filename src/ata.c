@@ -110,6 +110,16 @@ int ata_num_devices(void)
 	return ndev;
 }
 
+uint64_t ata_num_sectors(int devno)
+{
+	struct device *dev = devices + devno;
+
+	if(dev->nsect_lba48) {
+		return dev->nsect_lba48;
+	}
+	return dev->nsect_lba;
+}
+
 int ata_read_pio(int devno, uint64_t sect, void *buf)
 {
 	return readwrite_pio(devno, sect, buf, read_data);

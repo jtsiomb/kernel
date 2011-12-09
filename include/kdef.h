@@ -32,6 +32,8 @@
 #define EAGAIN		1
 #define EINVAL		2
 #define ECHILD		3
+
+#define EBUG		255	/* not implemented yet */
 #endif	/* errno.h */
 
 
@@ -47,8 +49,16 @@
 #define SYS_WAITPID		4
 #define SYS_GETPID		5
 #define SYS_GETPPID		6
+#define SYS_MOUNT		7
+#define SYS_UMOUNT		8
+#define SYS_OPEN		9
+#define SYS_CLOSE		10
+#define SYS_READ		11
+#define SYS_WRITE		12
+#define SYS_LSEEK		13
 
-#define NUM_SYSCALLS	7
+/* keep this one more than the last syscall */
+#define NUM_SYSCALLS	14
 
 #endif	/* syscall.h */
 

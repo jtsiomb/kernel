@@ -4,6 +4,7 @@
 #include "proc.h"
 #include "sched.h"
 #include "timer.h"
+#include "fs.h"
 
 static int (*sys_func[NUM_SYSCALLS])();
 
@@ -20,6 +21,14 @@ void init_syscall(void)
 	sys_func[SYS_WAITPID] = sys_waitpid;	/* proc.c */
 	sys_func[SYS_GETPID] = sys_getpid;		/* proc.c */
 	sys_func[SYS_GETPPID] = sys_getppid;	/* proc.c */
+
+	sys_func[SYS_MOUNT] = sys_mount;		/* fs.c */
+	sys_func[SYS_UMOUNT] = sys_umount;		/* fs.c */
+	sys_func[SYS_OPEN] = sys_open;			/* fs.c */
+	sys_func[SYS_CLOSE] = sys_close;		/* fs.c */
+	sys_func[SYS_READ] = sys_read;			/* fs.c */
+	sys_func[SYS_WRITE] = sys_write;		/* fs.c */
+	sys_func[SYS_LSEEK] = sys_lseek;		/* fs.c */
 
 	interrupt(SYSCALL_INT, syscall);
 }

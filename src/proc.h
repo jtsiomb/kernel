@@ -4,8 +4,10 @@
 #include <inttypes.h>
 #include "asmops.h"
 #include "rbtree.h"
+#include "file.h"
 
 #define MAX_PROC	128
+#define MAX_FD		64
 
 struct context {
 	/*struct registers regs;*/	/* saved general purpose registers */
@@ -45,6 +47,9 @@ struct process {
 	int kern_stack_pg;
 
 	struct context ctx;
+
+	/* open files */
+	struct file files[MAX_FD];
 
 	struct process *child_list;
 
