@@ -16,4 +16,6 @@ void blk_close(struct block_device *bdev);
 int blk_read(struct block_device *bdev, uint32_t blk, void *buf);
 int blk_write(struct block_device *bdev, uint32_t blk, void *buf);
 
+dev_t bdev_by_name(const char *name);
+
 #endif	/* BDEV_H_ */

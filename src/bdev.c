@@ -1,11 +1,13 @@
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include "bdev.h"
 #include "ata.h"
 #include "part.h"
 
-#define MINOR_DISK(x)	(((x) >> 4) & 0xf)
-#define MINOR_PART(x)	((x) & 0xf)
+#define MKMINOR(disk, part)	((((disk) & 0xf) << 4) | ((part) & 0xf))
+#define MINOR_DISK(x)		(((x) >> 4) & 0xf)
+#define MINOR_PART(x)		((x) & 0xf)
 
 struct block_device *blk_open(dev_t dev)
 {
@@ -83,4 +85,36 @@ int blk_write(struct block_device *bdev, uint32_t blk, void *buf)
 		ptr += 512;
 	}
 	return 0;
+}
+
+dev_t bdev_by_name(const char *name)
+{
+	int minor;
+	int atadev, part = 0;
+
+	char *tmp = strrchr(name, '/');
+	if(tmp) {
+		name = tmp + 1;
+	}
+
+	if(strstr(name, "ata") != name) {
+		return 0;
+	}
+	name += 3;
+
+	atadev = strtol(name, &tmp, 10);
+	if(tmp == name) {
+		return 0;
+	}
+	name = tmp;
+
+	if(*name++ == 'p') {
+		part = strtol(name, &tmp, 10) + 1;
+		if(tmp == name) {
+			return 0;
+		}
+	}
+
+	minor = MKMINOR(atadev, part);
+	return DEVNO(0, minor);
 }

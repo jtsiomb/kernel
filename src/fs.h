@@ -8,6 +8,7 @@
 
 #define SECT_TO_BLK(x)	((x) / (BLKSZ / 512))
 
+#define DEVNO(maj, min)	((((maj) & 0xff) << 8) | ((min) & 0xff))
 #define DEV_MAJOR(dev)	(((dev) >> 8) & 0xff)
 #define DEV_MINOR(dev)	((dev) & 0xff)
 

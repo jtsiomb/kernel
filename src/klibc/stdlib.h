@@ -8,6 +8,7 @@ typedef uint32_t size_t;
 
 int atoi(const char *str);
 long atol(const char *str);
+long strtol(const char *str, char **endp, int base);
 
 void itoa(int val, char *buf, int base);
 void utoa(unsigned int val, char *buf, int base);
