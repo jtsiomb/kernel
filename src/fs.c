@@ -10,6 +10,13 @@
 #include "fs.h"
 #include "bdev.h"
 
+#define BM_IDX(x)			((x) / 32)
+#define BM_BIT(x)			((x) & 0x1f)
+
+#define BM_ISFREE(bm, x)	(((bm)[BM_IDX(x)] & (1 << BM_BIT(x))) == 0)
+#define BM_SET(bm, x)		((bm)[BM_IDX(x)] |= (1 << BM_BIT(x)))
+#define BM_CLR(bm, x)		((bm)[BM_IDX(x)] &= ~(1 << BM_BIT(x)))
+
 
 int openfs(struct filesys *fs, dev_t dev);
 static int read_superblock(struct filesys *fs);
@@ -154,5 +161,37 @@ static int put_inode(struct filesys *fs, struct inode *inode)
 		return -1;
 	}
 	free(buf);
+	return 0;
+}
+
+static int find_free(uint32_t *bm, int sz)
+{
+	int i;
+	uint32_t ent;
+
+	for(i=0; i<=sz/32; i++) {
+		if(bm[i] != 0xffffffff) {
+			ent = i * 32;
+			for(j=0; j<32; j++) {
+				if(BM_ISFREE(bm, ent)) {
+					return ent;
+				}
+			}
+
+			panic("shouldn't happen (in find_free:fs.c)");
+		}
+	}
+
+	return -1;
+}
+
+static int alloc_inode(struct filesys *fs)
+{
+	int ino;
+
+	if((ino = find_free(fs->ibm, fs->ibm_count)) == -1) {
+		return -1;
+	}
+	BM_SET(fs->ibm, ino);
 	return 0;
 }

@@ -40,6 +40,9 @@ struct superblock {
 
 	/* total number of blocks */
 	unsigned int num_blocks;
+	/* total number of inodes */
+	unsigned int num_inodes;
+
 	/* inode allocation bitmap start and count */
 	blkid ibm_start;
 	unsigned int ibm_count;
