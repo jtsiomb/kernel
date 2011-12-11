@@ -32,8 +32,11 @@
 #define EAGAIN		1
 #define EINVAL		2
 #define ECHILD		3
+#define EBUSY		4
+#define ENOMEM		5
+#define EIO			6
 
-#define EBUG		255	/* not implemented yet */
+#define EBUG		127	/* error: feature not implemented yet */
 #endif	/* errno.h */
 
 

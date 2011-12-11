@@ -4,117 +4,82 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <errno.h>
 #include "fs.h"
-#include "part.h"
+#include "bdev.h"
 
-#ifdef KERNEL
-#include "ata.h"
-#include "panic.h"
-#endif
 
-struct filesys {
-	int dev;
-	struct partition part;
+int openfs(struct filesys *fs, dev_t dev);
+static int read_superblock(struct block_device *bdev, struct superblock *sb);
 
-	struct superblock *sb;
 
-	struct filesys *next;
-};
-
-static int find_rootfs(struct filesys *fs);
-static int readblock(int dev, uint32_t blk, void *buf);
-static int writeblock(int dev, uint32_t blk, void *buf);
-
-/* root device & partition */
-static struct filesys *fslist;
-
-int sys_mount(char *mtpt, char *devname, unsigned int flags)
+int openfs(struct filesys *fs, dev_t dev)
 {
-	if(strcmp(mtpt, "/") != 0) {
-		printf("mount: only root can be mounted at the moment\n");
-		return -EBUG;
+	int res;
+	struct block_device *bdev;
+	struct superblock *sb = 0;
+
+	if(!(bdev = blk_open(dev))) {
+		return -ENOENT;
 	}
 
-	/* mounting root filesystem */
-	if(fslist) {
-
-}
-
-void init_fs(void)
-{
-	root.sb = malloc(512);
-	assert(root.sb);
-
-#ifdef KERNEL
-	if(find_rootfs(&root) == -1) {
-		panic("can't find root filesystem\n");
+	/* read the superblock */
+	if(!(sb = malloc(BLKSZ))) {
+		res = -ENOMEM;
+		goto done;
 	}
-#endif
-}
-
-
-#ifdef KERNEL
-#define PART_TYPE	0xcc
-static int find_rootfs(struct filesys *fs)
-{
-	int i, num_dev, partid;
-	struct partition *plist, *p;
-
-	num_dev = ata_num_devices();
-	for(i=0; i<num_dev; i++) {
-		plist = p = get_part_list(i);
-
-		partid = 0;
-		while(p) {
-			if(get_part_type(p) == PART_TYPE) {
-				/* found the correct partition, now read the superblock
-				 * and make sure it's got the correct magic id
-				 */
-				readblock(i, p->start_sect / 2 + 1, fs->sb);
-
-				if(fs->sb->magic == MAGIC) {
-					printf("found root ata%dp%d\n", i, partid);
-					fs->dev = i;
-					fs->part = *p;
-					return 0;
-				}
-			}
-			p = p->next;
-			partid++;
-		}
-		free_part_list(plist);
+	if((res = read_superblock(bdev, sb)) != 0) {
+		goto done;
 	}
-	return -1;
+
+
+
+
+done:
+	blk_close(bdev);
+	free(sb);
+	return res;
 }
 
-#define NSECT	(BLKSZ / 512)
-
-static int readblock(struct block_device *bdev, uint32_t blk, void *buf)
+static int read_superblock(struct block_device *bdev, struct superblock *sb)
 {
-	return blk_read(bdev, blk, buf);
-}
+	/* read superblock and verify */
+	if(blk_read(bdev, 1, 1, sb) == -1) {
+		printf("failed to read superblock\n");
+		return -EIO;
+	}
+	if(sb->magic != MAGIC) {
+		printf("invalid magic\n");
+		return -EINVAL;
+	}
+	if(sb->ver > FS_VER) {
+		printf("invalid version: %d\n", sb->ver);
+		return -EINVAL;
+	}
+	if(sb->blksize != BLKSZ) {
+		printf("invalid block size: %d\n", sb->blksize);
+		return -EINVAL;
+	}
 
-static int writeblock(struct block_device *bdev, uint32_t blk, void *buf)
-{
-	return blk_write(bdev, blk, buf);
-}
-#else
+	/* allocate and populate in-memory bitmaps */
+	if(!(sb->ibm = malloc(sb->ibm_count * sb->blksize))) {
+		return -ENOMEM;
+	}
+	if(blk_read(bdev, sb->ibm_start, sb->ibm_count, sb->ibm) == -1) {
+		printf("failed to read inode bitmap\n");
+		free(sb->ibm);
+		return -EIO;
+	}
+	if(!(sb->bm = malloc(sb->bm_count * sb->blksize))) {
+		free(sb->ibm);
+		return -ENOMEM;
+	}
+	if(blk_read(bdev, sb->bm_start, sb->bm_count, sb->bm) == -1) {
+		printf("failed to read block bitmap\n");
+		free(sb->ibm);
+		free(sb->bm);
+		return -EIO;
+	}
 
-/* if this is compiled as part of the user-space tools instead of the kernel
- * forward the call to a user read/write block function supplied by the app.
- */
-int user_readblock(uint32_t, void*);
-int user_writeblock(uint32_t, void*);
-
-static int readblock(struct block_device *bdev, uint32_t blk, void *buf)
-{
-	return user_readblock(blk, buf);
+	return 0;
 }
-
-static int writeblock(struct block_device *bdev, uint32_t blk, void *buf)
-{
-	return user_writeblock(blk, buf);
-}
-#endif	/* KERNEL */

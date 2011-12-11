@@ -4,6 +4,7 @@
 #include <inttypes.h>
 
 #define MAGIC	0xccf5ccf5
+#define FS_VER	1
 #define BLKSZ	1024
 
 #define SECT_TO_BLK(x)	((x) / (BLKSZ / 512))
@@ -29,18 +30,15 @@ struct superblock {
 	/* inode table start and count */
 	blkid itbl_start;
 	unsigned int itbl_count;
-	/* data block allocation bitmap start and count */
-	blkid dbm_start;
-	unsigned int dbm_count;
-	/* data blocks start and count */
-	blkid data_start;
-	unsigned int data_count;
+	/* block allocation bitmap start and count */
+	blkid bm_start;
+	unsigned int bm_count;
 
 	int root_ino;	/* root direcotry inode */
 
 	/* the following are valid only at runtime, ignored on disk */
-	uint32_t *ibm;	/* memory inode bitmap */
-	uint32_t *dbm;	/* memory datablock bitmap */
+	uint32_t *ibm;	/* in-memory inode bitmap */
+	uint32_t *bm;	/* in-memory block bitmap */
 
 } __attribute__((packed));
 
@@ -60,6 +58,20 @@ struct inode {
 } __attribute__((packed));
 
 
+struct filesys {
+	struct block_device *bdev;
+	struct partition part;
+
+	struct superblock *sb;
+
+	struct filesys *next;
+};
+
+/* defined in fs.c */
+int openfs(struct filesys *fs, dev_t dev);
+int find_inode(const char *path);
+
+/* defined in fs_sys.c */
 int sys_mount(char *mntpt, char *devname, unsigned int flags);
 int sys_umount(char *devname);
 
@@ -69,8 +81,6 @@ int sys_close(int fd);
 int sys_read(int fd, void *buf, int sz);
 int sys_write(int fd, void *buf, int sz);
 long sys_lseek(int fd, long offs, int from);
-
-int lookup_path(const char *path);
 
 
 #endif	/* FS_H_ */
