@@ -17,6 +17,22 @@
 typedef uint32_t dev_t;
 typedef uint32_t blkid;
 
+
+/* 20 direct blocks + 10 attributes + 2 indirect = 128 bytes per inode */
+#define NDIRBLK	20
+struct inode {
+	int ino;
+	int uid, gid, mode;
+	int nlink;
+	dev_t dev;
+	uint32_t atime, ctime, mtime;
+	uint32_t size;
+	blkid blk[NDIRBLK];	/* direct blocks */
+	blkid ind;			/* indirect */
+	blkid dind;			/* double-indirect */
+} __attribute__((packed));
+
+
 struct superblock {
 	uint32_t magic;	/* magic number */
 	int ver;		/* filesystem version */
@@ -34,33 +50,19 @@ struct superblock {
 	blkid bm_start;
 	unsigned int bm_count;
 
-	int root_ino;	/* root direcotry inode */
+	int root_ino;	/* root direcotry inode number */
 
 	/* the following are valid only at runtime, ignored on disk */
 	uint32_t *ibm;	/* in-memory inode bitmap */
 	uint32_t *bm;	/* in-memory block bitmap */
+	struct inode *root;	/* in-memory root inode */
 
 } __attribute__((packed));
 
-
-/* 20 direct blocks + 10 attributes + 2 indirect = 128 bytes per inode */
-#define NDIRBLK	20
-struct inode {
-	int ino;
-	int uid, gid, mode;
-	int nlink;
-	dev_t dev;
-	uint32_t atime, ctime, mtime;
-	uint32_t size;
-	blkid blk[NDIRBLK];	/* direct blocks */
-	blkid ind;			/* indirect */
-	blkid dind;			/* double-indirect */
-} __attribute__((packed));
 
 
 struct filesys {
 	struct block_device *bdev;
-	struct partition part;
 
 	struct superblock *sb;
 
@@ -69,6 +71,7 @@ struct filesys {
 
 /* defined in fs.c */
 int openfs(struct filesys *fs, dev_t dev);
+void closefs(struct filesys *fs);
 int find_inode(const char *path);
 
 /* defined in fs_sys.c */

@@ -29,14 +29,17 @@
 
 /* --- defines for errno.h */
 #if defined(KERNEL) || defined(KDEF_ERRNO_H)
-#define EAGAIN		1
-#define EINVAL		2
-#define ECHILD		3
-#define EBUSY		4
-#define ENOMEM		5
-#define EIO			6
+#define EFOO		1 /* I just like to return -1 some times :) */
 
-#define EBUG		127	/* error: feature not implemented yet */
+#define EAGAIN		2
+#define EINVAL		3
+#define ECHILD		4
+#define EBUSY		5
+#define ENOMEM		6
+#define EIO			7
+#define ENOENT		8
+
+#define EBUG		127	/* for missing features and known bugs */
 #endif	/* errno.h */
 
 
