@@ -77,6 +77,8 @@ static void start_first_proc(void)
 	p->id = 1;
 	p->parent = 0;	/* no parent for init */
 
+	p->umask = 022;
+
 	p->ticks_left = TIMESLICE_TICKS;
 	p->next = p->prev = 0;
 
@@ -167,6 +169,8 @@ int sys_fork(void)
 
 	/* copy file table */
 	memcpy(p->files, parent->files, sizeof p->files);
+
+	p->umask = parent->umask;
 
 	/* allocate a kernel stack for the new process */
 	if((p->kern_stack_pg = pgalloc(KERN_STACK_SIZE / PGSIZE, MEM_KERNEL)) == -1) {

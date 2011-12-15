@@ -1,7 +1,4 @@
-/* This code is used by the kernel AND by userspace filesystem-related tools.
- * The kernel-specific parts are conditionally compiled in #ifdef KERNEL blocks
- * the rest of the code should be independent.
- */
+/* This code is used by the kernel AND by userspace filesystem-related tools. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +6,14 @@
 #include <assert.h>
 #include "fs.h"
 #include "bdev.h"
+#include "kdef.h"
+
+/* number of inodes in a block */
+#define BLK_INODES		(BLKSZ / sizeof(struct inode))
+/* number of directory entries in a block */
+#define BLK_DIRENT		(BLKSZ / sizeof(struct dir_entry))
+
+#define BLKBITS				(BLKSZ * 8)
 
 #define BM_IDX(x)			((x) / 32)
 #define BM_BIT(x)			((x) & 0x1f)
@@ -18,11 +23,18 @@
 #define BM_CLR(bm, x)		((bm)[BM_IDX(x)] &= ~(1 << BM_BIT(x)))
 
 
-int openfs(struct filesys *fs, dev_t dev);
+static struct inode *newdir(struct filesys *fs, struct inode *parent);
+static int addlink(struct filesys *fs, struct inode *target, struct inode *node, const char *name);
 static int read_superblock(struct filesys *fs);
 static int write_superblock(struct filesys *fs);
 static int get_inode(struct filesys *fs, int ino, struct inode *inode);
 static int put_inode(struct filesys *fs, struct inode *inode);
+static int find_free(uint32_t *bm, int sz);
+static int alloc_inode(struct filesys *fs);
+static void free_inode(struct filesys *fs, int ino);
+static int alloc_block(struct filesys *fs);
+static void free_block(struct filesys *fs, int ino);
+static int file_block(struct filesys *fs, struct inode *node, int boffs);
 
 int openfs(struct filesys *fs, dev_t dev)
 {
@@ -38,18 +50,163 @@ int openfs(struct filesys *fs, dev_t dev)
 
 	/* read the superblock */
 	if(!(fs->sb = malloc(BLKSZ))) {
-		res = -ENOMEM;
-		goto done;
+		blk_close(bdev);
+		return -ENOMEM;
 	}
 	if((res = read_superblock(fs)) != 0) {
-		goto done;
+		blk_close(bdev);
+		return res;
 	}
 
-
-done:
-	blk_close(bdev);
-	return res;
+	return 0;
 }
+
+int mkfs(struct filesys *fs, dev_t dev)
+{
+	struct filesys *fs;
+	struct superblock *sb;
+	struct block_device *bdev;
+	int i, bcount;
+
+	if(!(bdev = blk_open(dev))) {
+		return -1;
+	}
+	fs->bdev = bdev;
+
+	if(!(sb = malloc(BLKSZ))) {
+		blk_close(bdev);
+		return -1;
+	}
+	fs->sb = sb;
+
+	/* populate the superblock */
+	sb->magic = MAGIC;
+	sb->ver = FS_VER;
+	sb->blksize = BLKSZ;
+
+	sb->num_blocks = bdev->size;
+	sb->num_inodes = sb->num_blocks / 4;
+
+	/* inode bitmap just after the superblock */
+	sb->ibm_start = 2;
+	sb->ibm_count = (sb->num_inodes + BLKBITS - 1) / BLKBITS;
+	/* also allocate and initialize in-memory inode bitmap */
+	sb->ibm = malloc(sb->ibm_count * BLKSZ);
+	assert(sb->ibm);
+	memset(sb->ibm, 0, sb->ibm_count * BLKSZ);
+
+	/* XXX mark inode 0 as used always */
+	BM_SET(sb->ibm, 0);
+
+	/* block bitmap just after the inode bitmap */
+	sb->bm_start = sb->ibm_start + sb->ibm_count;
+	sb->bm_count = (sb->num_blocks + BLKBITS - 1) / BLKBITS;
+	/* also allocate and initialize in-memory block bitmap */
+	sb->bm = malloc(sb->bm_count * BLKSZ);
+	assert(sb->bm);
+	memset(sb->bm, 0, sb->bm_count * BLKSZ);
+
+	/* inode table, just after the block bitmap */
+	sb->itbl_start = sb->bm_start + sb->bm_count;
+	sb->itbl_count = (sb->num_inodes * sizeof(struct inode) + BLKSZ - 1) / BLKSZ;
+
+	/* mark all used blocks as used */
+	bcount = sb->itbl_start + sb->itbl_count;
+	memset(sb->bm, 0xff, bcount / 8);
+	for(i=0; i<bcount % 8; i++) {
+		int bit = bcount / 8 + i;
+		BM_SET(sb->bm, bit);
+	}
+
+	/* create the root directory */
+	sb->root = newdir(fs, 0);
+	sb->root_ino = sb->root->ino;
+}
+
+static struct inode *newdir(struct filesys *fs, struct inode *parent)
+{
+	struct inode *dirnode;
+
+	/* allocate and initialize inode */
+	if(!(dirnode = malloc(sizeof *dirnode))) {
+		return 0;
+	}
+	memset(dirnode, 0, sizeof *dirnode);
+
+	if((dirnode->ino = alloc_inode(fs)) == -1) {
+		printf("failed to allocate inode for a new directory\n");
+		free(dirnode);
+		return 0;
+	}
+	dirnode->mode = S_IFDIR;
+
+	/* add . and .. links */
+	addlink(fs, dirnode, dirnode, ".");
+	addlink(fs, dirnode, parent ? parent : dirnode, "..");
+
+	/* and write the inode to disk */
+	put_inode(fs, dirnode);
+	return dirnode;
+}
+
+static int addlink(struct filesys *fs, struct inode *target, struct inode *node, const char *name)
+{
+	struct dir_entry ent, *data;
+	int boffs, bidx, len;
+
+	if(!(target->mode & S_IFDIR)) {
+		return -ENOTDIR;
+	}
+	if(node->mode & S_IFDIR) {
+		return -EPERM;
+	}
+	/* TODO check that the link does not already exist (EEXIST) */
+
+	if((len = strlen(name)) > MAX_FNAME) {
+		return -ENAMETOOLONG;
+	}
+	ent->ino = node->ino;
+	memcpy(newent->name, name, len + 1);
+
+	/* find a place to put it */
+	if(!(data = malloc(BLKSZ))) {
+		return -ENOMEM;
+	}
+
+	boffs = 0;
+	while((bidx = file_block(fs, target, boffs)) > 0) {
+		/* read the block, and search for an empty entry */
+		blk_read(fs->bdev, bidx, 1, data);
+
+		/* for all directory entries in this block... */
+		for(i=0; i<BLK_DIRENT; i++) {
+			if(data[i].ino == 0) {
+				/* found empty */
+				memcpy(data + i, &ent, sizeof ent);
+				goto success;
+			}
+		}
+		boffs++;
+	}
+
+	/* didn't find any free entries amongst our blocks, allocate a new one */
+	if(!(bidx = alloc_file_block(fs, target, boffs))) {
+		free(data);
+		return -ENOSPC;
+	}
+	/* zero-fill the new block and add the first entry */
+	memset(data, 0, BLKSZ);
+	*data = ent;
+
+success:
+	/* write to disk */
+	blk_write(fs->bdev, bidx, 1, data);
+	node->nlink++;	/* increase reference count */
+
+	free(data);
+	return 0;
+}
+
 
 static int read_superblock(struct filesys *fs)
 {
@@ -123,11 +280,12 @@ static int write_superblock(struct filesys *fs)
 	if(blk_write(fs->bdev, sb->ibm_start, sb->ibm_count, sb->ibm) == -1) {
 		return -1;
 	}
+	/* write the superblock itself */
+	if(blk_write(fs->bdev, 1, 1, sb) == -1) {
+		return -1;
+	}
 	return 0;
 }
-
-/* number of inodes in a block */
-#define BLK_INODES		(BLKSZ / sizeof(struct inode))
 
 /* copy the requested inode from the disk, into the buffer passed in the last arg */
 static int get_inode(struct filesys *fs, int ino, struct inode *inode)
@@ -164,21 +322,24 @@ static int put_inode(struct filesys *fs, struct inode *inode)
 	return 0;
 }
 
-static int find_free(uint32_t *bm, int sz)
+/* find a free element in the bitmap and return its number */
+static int find_free(uint32_t *bm, int nbits)
 {
-	int i;
-	uint32_t ent;
+	int i, j, nwords = nbits / 32;
+	uint32_t ent = 0;
 
-	for(i=0; i<=sz/32; i++) {
+	for(i=0; i<=nwords; i++) {
 		if(bm[i] != 0xffffffff) {
-			ent = i * 32;
 			for(j=0; j<32; j++) {
 				if(BM_ISFREE(bm, ent)) {
 					return ent;
 				}
+				ent++;
 			}
 
 			panic("shouldn't happen (in find_free:fs.c)");
+		} else {
+			ent += 32;
 		}
 	}
 
@@ -189,9 +350,82 @@ static int alloc_inode(struct filesys *fs)
 {
 	int ino;
 
-	if((ino = find_free(fs->ibm, fs->ibm_count)) == -1) {
+	if((ino = find_free(fs->sb->ibm, fs->sb->num_inodes)) == -1) {
 		return -1;
 	}
-	BM_SET(fs->ibm, ino);
+	BM_SET(fs->sb->ibm, ino);
 	return 0;
+}
+
+static void free_inode(struct filesys *fs, int ino)
+{
+	BM_CLR(fs->sb->ibm, ino);
+}
+
+static int alloc_block(struct filesys *fs)
+{
+	int ino;
+
+	if((ino = find_free(fs->sb->bm, fs->sb->num_blocks)) == -1) {
+		return -1;
+	}
+	BM_SET(fs->sb->bm, ino);
+	return 0;
+}
+
+static void free_block(struct filesys *fs, int ino)
+{
+	BM_CLR(fs->sb->bm, ino);
+}
+
+#define BLK_BLKID	(BLKSZ / sizeof(blkid))
+#define MAX_IND		(NDIRBLK + BLK_BLKID)
+#define MAX_DIND	(MAX_IND + BLK_BLKID * BLK_BLKID)
+
+static int file_block(struct filesys *fs, struct inode *node, int boffs)
+{
+	int res, idx;
+	blkid *barr;
+
+	/* is it a direct block ? */
+	if(boffs < NDIRBLK) {
+		return node->blk[boffs];
+	}
+
+	barr = malloc(BLKSZ);
+	assert(barr);
+
+	/* is it an indirect block ? */
+	if(boffs < MAX_IND) {
+		if(!node->ind) {
+			res = 0;
+			goto end;
+		}
+		blk_read(fs->bdev, node->ind, 1, barr);
+		res = barr[boffs - NDIRBLK];
+		goto end;
+	}
+
+	/* is it a double-indirect block ? */
+	if(boffs < MAX_DIND) {
+		/* first read the dind block and find the index of the ind block */
+		if(!node->dind) {
+			res = 0;
+			goto end;
+		}
+		blk_read(fd->bdev, node->dind, 1, barr);
+		idx = (boffs - MAX_IND) / BLK_BLKID;
+
+		/* then read the ind block and find the index of the block */
+		if(!barr[idx]) {
+			res = 0;
+			goto end;
+		}
+		blk_read(fd->bdev, barr[idx], 1, barr);
+		res = barr[(boffs - MAX_IND) % BLK_BLKID];
+	}
+
+end:
+	free(barr);
+	return res;
 }

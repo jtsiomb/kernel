@@ -3,9 +3,12 @@
 
 #include <inttypes.h>
 
-#define MAGIC	0xccf5ccf5
-#define FS_VER	1
-#define BLKSZ	1024
+#define MAGIC		0xccf5ccf5
+#define FS_VER		1
+#define BLKSZ		1024
+
+#define NAME_MAX	27	/* +1 termin. +4 ino = 32 per dirent */
+#define PATH_MAX	256
 
 #define SECT_TO_BLK(x)	((x) / (BLKSZ / 512))
 
@@ -32,6 +35,10 @@ struct inode {
 	blkid dind;			/* double-indirect */
 } __attribute__((packed));
 
+struct dir_entry {
+	int ino;
+	char name[NAME_MAX + 1];
+} __attribute__((packed));
 
 struct superblock {
 	uint32_t magic;	/* magic number */
@@ -74,6 +81,7 @@ struct filesys {
 
 /* defined in fs.c */
 int openfs(struct filesys *fs, dev_t dev);
+int mkfs(struct filesys *fs, dev_t dev);
 void closefs(struct filesys *fs);
 int find_inode(const char *path);
 
