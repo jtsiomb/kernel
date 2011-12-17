@@ -1,4 +1,11 @@
 /* This code is used by the kernel AND by userspace filesystem-related tools. */
+
+/* XXX convention:
+ * - functions that accept or return a struct inode, do not read/write it to disk
+ * - functions that accept or return an int ino, do read/write it to disk
+ * other kinds of blocks (data, indirect, etc) always hit the disk directly.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,10 +38,19 @@ static int get_inode(struct filesys *fs, int ino, struct inode *inode);
 static int put_inode(struct filesys *fs, struct inode *inode);
 static int find_free(uint32_t *bm, int sz);
 static int alloc_inode(struct filesys *fs);
-static void free_inode(struct filesys *fs, int ino);
+#define free_inode(fs, ino)		BM_CLR((fs)->sb->ibm, (ino))
 static int alloc_block(struct filesys *fs);
-static void free_block(struct filesys *fs, int ino);
-static int file_block(struct filesys *fs, struct inode *node, int boffs);
+#define free_block(fs, bno)		BM_CLR((fs)->sb->bm, (bno))
+#define zero_block(fs, bno) \
+	do { \
+		assert(bno > 0); \
+		blk_write((fs)->bdev, (bno), 1, (fs)->zeroblock); \
+	} while(0)
+
+static int file_block(struct filesys *fs, struct inode *node, int boffs, int allocate);
+#define get_file_block(fs, node, boffs)		file_block(fs, node, boffs, 0)
+#define alloc_file_block(fs, node, boffs)	file_block(fs, node, boffs, 1)
+
 
 int openfs(struct filesys *fs, dev_t dev)
 {
@@ -58,12 +74,21 @@ int openfs(struct filesys *fs, dev_t dev)
 		return res;
 	}
 
+	/* allocate the zero-block buffer written to zero-out blocks */
+	if(!(fs->zeroblock = malloc(fs->sb->blksize))) {
+		blk_close(bdev);
+		free(fs->sb->ibm);
+		free(fs->sb->bm);
+		free(fs->sb->root);
+		return -ENOMEM;
+	}
+	memset(fs->zeroblock, 0xff, fs->sb->blksize);
+
 	return 0;
 }
 
 int mkfs(struct filesys *fs, dev_t dev)
 {
-	struct filesys *fs;
 	struct superblock *sb;
 	struct block_device *bdev;
 	int i, bcount;
@@ -121,6 +146,10 @@ int mkfs(struct filesys *fs, dev_t dev)
 	/* create the root directory */
 	sb->root = newdir(fs, 0);
 	sb->root_ino = sb->root->ino;
+	/* and write the inode to disk */
+	put_inode(fs, sb->root);
+
+	return 0;
 }
 
 static struct inode *newdir(struct filesys *fs, struct inode *parent)
@@ -144,15 +173,13 @@ static struct inode *newdir(struct filesys *fs, struct inode *parent)
 	addlink(fs, dirnode, dirnode, ".");
 	addlink(fs, dirnode, parent ? parent : dirnode, "..");
 
-	/* and write the inode to disk */
-	put_inode(fs, dirnode);
 	return dirnode;
 }
 
 static int addlink(struct filesys *fs, struct inode *target, struct inode *node, const char *name)
 {
 	struct dir_entry ent, *data;
-	int boffs, bidx, len;
+	int i, boffs, bidx, len;
 
 	if(!(target->mode & S_IFDIR)) {
 		return -ENOTDIR;
@@ -162,11 +189,11 @@ static int addlink(struct filesys *fs, struct inode *target, struct inode *node,
 	}
 	/* TODO check that the link does not already exist (EEXIST) */
 
-	if((len = strlen(name)) > MAX_FNAME) {
+	if((len = strlen(name)) > NAME_MAX) {
 		return -ENAMETOOLONG;
 	}
-	ent->ino = node->ino;
-	memcpy(newent->name, name, len + 1);
+	ent.ino = node->ino;
+	memcpy(ent.name, name, len + 1);
 
 	/* find a place to put it */
 	if(!(data = malloc(BLKSZ))) {
@@ -174,7 +201,7 @@ static int addlink(struct filesys *fs, struct inode *target, struct inode *node,
 	}
 
 	boffs = 0;
-	while((bidx = file_block(fs, target, boffs)) > 0) {
+	while((bidx = get_file_block(fs, target, boffs)) > 0) {
 		/* read the block, and search for an empty entry */
 		blk_read(fs->bdev, bidx, 1, data);
 
@@ -357,61 +384,98 @@ static int alloc_inode(struct filesys *fs)
 	return 0;
 }
 
-static void free_inode(struct filesys *fs, int ino)
-{
-	BM_CLR(fs->sb->ibm, ino);
-}
-
 static int alloc_block(struct filesys *fs)
 {
-	int ino;
+	int bno;
 
-	if((ino = find_free(fs->sb->bm, fs->sb->num_blocks)) == -1) {
+	if((bno = find_free(fs->sb->bm, fs->sb->num_blocks)) == -1) {
 		return -1;
 	}
-	BM_SET(fs->sb->bm, ino);
+	BM_SET(fs->sb->bm, bno);
 	return 0;
-}
-
-static void free_block(struct filesys *fs, int ino)
-{
-	BM_CLR(fs->sb->bm, ino);
 }
 
 #define BLK_BLKID	(BLKSZ / sizeof(blkid))
 #define MAX_IND		(NDIRBLK + BLK_BLKID)
 #define MAX_DIND	(MAX_IND + BLK_BLKID * BLK_BLKID)
 
-static int file_block(struct filesys *fs, struct inode *node, int boffs)
+static int file_block(struct filesys *fs, struct inode *node, int boffs, int allocate)
 {
-	int res, idx;
+	int res, idx, node_dirty = 0;
 	blkid *barr;
+
+	/* out of bounds */
+	if(boffs < 0 || boffs >= MAX_DIND) {
+		return 0;
+	}
 
 	/* is it a direct block ? */
 	if(boffs < NDIRBLK) {
-		return node->blk[boffs];
+		if(!(res = node->blk[boffs]) && allocate) {
+			res = node->blk[boffs] = alloc_block(fs);
+			if(res) {
+				zero_block(fs, res);
+				/* also write back the modified inode */
+				put_inode(fs, node);
+			}
+		}
+		return res;
 	}
 
-	barr = malloc(BLKSZ);
+	barr = malloc(fs->sb->blksize);
 	assert(barr);
 
 	/* is it an indirect block ? */
 	if(boffs < MAX_IND) {
-		if(!node->ind) {
-			res = 0;
-			goto end;
+		int ind_dirty = 0;
+
+		if(node->ind) {
+			/* read the indirect block */
+			blk_read(fs->bdev, node->ind, 1, barr);
+		} else {
+			/* does not exist... try to allocate if requested */
+			if(!allocate || !(node->ind = alloc_block(fs))) {
+				res = 0;
+				goto end;
+			}
+
+			/* allocated a block clear the buffer, and invalidate everything */
+			memset(barr, 0, sizeof fs->sb->blksize);
+			node_dirty = 1;
+			ind_dirty = 1;
 		}
-		blk_read(fs->bdev, node->ind, 1, barr);
-		res = barr[boffs - NDIRBLK];
+
+		idx = boffs - NDIRBLK;
+
+		if(!(res = barr[idx])) {
+			if(allocate && (res = barr[idx] = alloc_block(fs))) {
+				ind_dirty = 1;
+			}
+		}
+
+		/* write back the indirect block if needed */
+		if(ind_dirty) {
+			blk_write(fs->bdev, node->ind, 1, barr);
+		}
 		goto end;
 	}
 
+	/* TODO check/rewrite this */
+#if 0
 	/* is it a double-indirect block ? */
 	if(boffs < MAX_DIND) {
 		/* first read the dind block and find the index of the ind block */
 		if(!node->dind) {
-			res = 0;
-			goto end;
+			if(allocate) {
+				/* allocate and zero-out the double indirect block */
+				res = node->dind = alloc_block(fs);
+				if(res) {
+					zero_block(fs, res);
+				}
+			} else {
+				res = 0;
+				goto end;
+			}
 		}
 		blk_read(fd->bdev, node->dind, 1, barr);
 		idx = (boffs - MAX_IND) / BLK_BLKID;
@@ -424,8 +488,12 @@ static int file_block(struct filesys *fs, struct inode *node, int boffs)
 		blk_read(fd->bdev, barr[idx], 1, barr);
 		res = barr[(boffs - MAX_IND) % BLK_BLKID];
 	}
+#endif
 
 end:
+	if(node_dirty) {
+		put_inode(fs, node);
+	}
 	free(barr);
 	return res;
 }

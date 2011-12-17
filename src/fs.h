@@ -76,6 +76,8 @@ struct filesys {
 
 	struct superblock *sb;
 
+	void *zeroblock;
+
 	struct filesys *next;
 };
 

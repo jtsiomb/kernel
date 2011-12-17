@@ -41,6 +41,7 @@
 #define ENAMETOOLONG	9
 #define ENOSPC			10
 #define EPERM			11
+#define ENOTDIR			12
 
 #define EBUG		127	/* for missing features and known bugs */
 #endif	/* errno.h */
