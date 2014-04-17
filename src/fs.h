@@ -3,8 +3,12 @@
 
 #include <inttypes.h>
 
-#define MAGIC	0xccf5ccf5
-#define BLKSZ	1024
+#define MAGIC		0xccf5ccf5
+#define FS_VER		1
+#define BLKSZ		1024
+
+#define NAME_MAX	27	/* +1 termin. +4 ino = 32 per dirent */
+#define PATH_MAX	256
 
 #define SECT_TO_BLK(x)	((x) / (BLKSZ / 512))
 
@@ -15,34 +19,6 @@
 
 typedef uint32_t dev_t;
 typedef uint32_t blkid;
-
-struct superblock {
-	uint32_t magic;	/* magic number */
-	int ver;		/* filesystem version */
-	int blksize;	/* only BLKSZ supported at the moment */
-
-	/* total number of blocks */
-	unsigned int num_blocks;
-	/* inode allocation bitmap start and count */
-	blkid ibm_start;
-	unsigned int ibm_count;
-	/* inode table start and count */
-	blkid itbl_start;
-	unsigned int itbl_count;
-	/* data block allocation bitmap start and count */
-	blkid dbm_start;
-	unsigned int dbm_count;
-	/* data blocks start and count */
-	blkid data_start;
-	unsigned int data_count;
-
-	int root_ino;	/* root direcotry inode */
-
-	/* the following are valid only at runtime, ignored on disk */
-	uint32_t *ibm;	/* memory inode bitmap */
-	uint32_t *dbm;	/* memory datablock bitmap */
-
-} __attribute__((packed));
 
 
 /* 20 direct blocks + 10 attributes + 2 indirect = 128 bytes per inode */
@@ -59,7 +35,59 @@ struct inode {
 	blkid dind;			/* double-indirect */
 } __attribute__((packed));
 
+struct dir_entry {
+	int ino;
+	char name[NAME_MAX + 1];
+} __attribute__((packed));
 
+struct superblock {
+	uint32_t magic;	/* magic number */
+	int ver;		/* filesystem version */
+	int blksize;	/* only BLKSZ supported at the moment */
+
+	/* total number of blocks */
+	unsigned int num_blocks;
+	/* total number of inodes */
+	unsigned int num_inodes;
+
+	/* inode allocation bitmap start and count */
+	blkid ibm_start;
+	unsigned int ibm_count;
+	/* inode table start and count */
+	blkid itbl_start;
+	unsigned int itbl_count;
+	/* block allocation bitmap start and count */
+	blkid bm_start;
+	unsigned int bm_count;
+
+	int root_ino;	/* root direcotry inode number */
+
+	/* the following are valid only at runtime, ignored on disk */
+	uint32_t *ibm;	/* in-memory inode bitmap */
+	uint32_t *bm;	/* in-memory block bitmap */
+	struct inode *root;	/* in-memory root inode */
+
+} __attribute__((packed));
+
+
+
+struct filesys {
+	struct block_device *bdev;
+
+	struct superblock *sb;
+
+	void *zeroblock;
+
+	struct filesys *next;
+};
+
+/* defined in fs.c */
+int openfs(struct filesys *fs, dev_t dev);
+int mkfs(struct filesys *fs, dev_t dev);
+void closefs(struct filesys *fs);
+int find_inode(const char *path);
+
+/* defined in fs_sys.c */
 int sys_mount(char *mntpt, char *devname, unsigned int flags);
 int sys_umount(char *devname);
 
@@ -69,8 +97,6 @@ int sys_close(int fd);
 int sys_read(int fd, void *buf, int sz);
 int sys_write(int fd, void *buf, int sz);
 long sys_lseek(int fd, long offs, int from);
-
-int lookup_path(const char *path);
 
 
 #endif	/* FS_H_ */

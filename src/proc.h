@@ -51,6 +51,8 @@ struct process {
 	/* open files */
 	struct file files[MAX_FD];
 
+	unsigned int umask;
+
 	struct process *child_list;
 
 	struct process *next, *prev;	/* for the scheduler queues */

@@ -47,10 +47,12 @@ int mkfs(int fd, int blksize, uint32_t nblocks)
 {
 	struct superblock *sb;
 
-	if(!(sb = malloc(BLKSZ))) {
-		perror("failed to allocate memory");
-		return -1;
-	}
+	sb = malloc(BLKSZ);
+	assert(sb);
+
+	sb->magic = MAGIC;
+	sb->ver = 0;
+	sb->num_blocks = nblocks;
 }
 
 uint32_t get_block_count(int fd, int blksize)
@@ -84,23 +86,23 @@ uint32_t get_block_count(int fd, int blksize)
 	return 0;
 }
 
-int user_readblock(int dev, uint32_t blk, void *buf)
+int blk_read(void*, uint32_t blk, int count, void *buf)
 {
 	if(lseek(fd, blk * BLKSZ, SEEK_SET) == -1) {
 		return -1;
 	}
-	if(read(fd, buf, BLKSZ) < BLKSZ) {
+	if(read(fd, buf, BLKSZ * count) < BLKSZ * count) {
 		return -1;
 	}
 	return 0;
 }
 
-int user_writeblock(int dev, uint32_t blk, void *buf)
+int blk_write(void*, uint32_t blk, int count, void *buf)
 {
 	if(lseek(fd, blk * BLKSZ, SEEK_SET) == -1) {
 		return -1;
 	}
-	if(write(fd, buf, BLKSZ) < BLKSZ) {
+	if(write(fd, buf, BLKSZ * count) < BLKSZ * count) {
 		return -1;
 	}
 	return 0;

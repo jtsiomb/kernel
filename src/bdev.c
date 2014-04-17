@@ -40,11 +40,13 @@ struct block_device *blk_open(dev_t dev)
 
 		bdev->offset = SECT_TO_BLK(plist->start_sect);
 		bdev->size = SECT_TO_BLK(plist->size_sect);
+		bdev->ptype = get_part_type(plist);
 
 		free_part_list(plist);
 	} else {
 		bdev->offset = 0;
 		bdev->size = SECT_TO_BLK(ata_num_sectors(devno));
+		bdev->ptype = 0;
 	}
 
 	return bdev;
@@ -57,13 +59,13 @@ void blk_close(struct block_device *bdev)
 
 #define NSECT	(BLKSZ / 512)
 
-int blk_read(struct block_device *bdev, uint32_t blk, void *buf)
+int blk_read(struct block_device *bdev, uint32_t blk, int count, void *buf)
 {
 	int i;
 	char *ptr = buf;
-	uint32_t sect = blk * NSECT;
+	uint32_t sect = blk * NSECT + bdev->offset;
 
-	for(i=0; i<NSECT; i++) {
+	for(i=0; i<NSECT * count; i++) {
 		if(ata_read_pio(bdev->ata_dev, sect++, ptr) == -1) {
 			return -1;
 		}
@@ -72,13 +74,13 @@ int blk_read(struct block_device *bdev, uint32_t blk, void *buf)
 	return 0;
 }
 
-int blk_write(struct block_device *bdev, uint32_t blk, void *buf)
+int blk_write(struct block_device *bdev, uint32_t blk, int count, void *buf)
 {
 	int i;
 	char *ptr = buf;
-	uint32_t sect = blk * NSECT;
+	uint32_t sect = blk * NSECT + bdev->offset;
 
-	for(i=0; i<NSECT; i++) {
+	for(i=0; i<NSECT * count; i++) {
 		if(ata_write_pio(bdev->ata_dev, sect++, ptr) == -1) {
 			return -1;
 		}
@@ -116,5 +118,5 @@ dev_t bdev_by_name(const char *name)
 	}
 
 	minor = MKMINOR(atadev, part);
-	return DEVNO(0, minor);
+	return DEVNO(1, minor);
 }
