@@ -1,5 +1,5 @@
-Article 1 source code
----------------------
+A minimal UNIX kernel project for x86 PCs
+-----------------------------------------
 Author: John Tsiombikas <nuclear@member.fsf.org>
 
 License: GNU GPL v3 or any later version published by the free software
@@ -7,9 +7,17 @@ License: GNU GPL v3 or any later version published by the free software
 
 About
 -----
-This is the supplemental source code for the first part of the introduction to
-kernel development articles. It deals with booting up from a multiboot-compliant
-boot loader and using the VGA for text output.
+When the editor of the Linux Inside magazine asked me to write for his newborn
+magazine, I leapt at the chance to start a series of introductory articles on
+kernel programming.
+For this reason I started writing a minimal, UNIX-like, operating system kernel
+from scratch. It's not complete yet, but it already has user/kernel protection
+levels, a virtual memory system with copy-on-write, processes, task switching,
+etc.
+
+The articles themselves (only in Greek at the moment unfortunately) can be found
+at: http://nuclear.mutantstargoat.com/articles/kerneldev/index.html
+
 
 Compiling & Running
 -------------------
