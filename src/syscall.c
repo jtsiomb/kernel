@@ -22,6 +22,7 @@ void init_syscall(void)
 	sys_func[SYS_GETPID] = sys_getpid;		/* proc.c */
 	sys_func[SYS_GETPPID] = sys_getppid;	/* proc.c */
 
+#if 0
 	sys_func[SYS_MOUNT] = sys_mount;		/* fs.c */
 	sys_func[SYS_UMOUNT] = sys_umount;		/* fs.c */
 	sys_func[SYS_OPEN] = sys_open;			/* fs.c */
@@ -29,6 +30,7 @@ void init_syscall(void)
 	sys_func[SYS_READ] = sys_read;			/* fs.c */
 	sys_func[SYS_WRITE] = sys_write;		/* fs.c */
 	sys_func[SYS_LSEEK] = sys_lseek;		/* fs.c */
+#endif
 
 	interrupt(SYSCALL_INT, syscall);
 }

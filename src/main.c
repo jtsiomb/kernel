@@ -40,7 +40,7 @@ void kmain(struct mboot_info *mbinf)
 	/* initialize ATA disks */
 	init_ata();
 	/* initialize the filesystem */
-	init_fs();
+	/*init_fs();*/
 
 	/* initialize the timer and RTC */
 	init_timer();
