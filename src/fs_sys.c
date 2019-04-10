@@ -9,6 +9,7 @@
 #include "part.h"
 #include "panic.h"
 #include "bdev.h"
+#include "ata.h"
 
 static dev_t find_rootfs(void);
 
@@ -67,6 +68,7 @@ rootfail:
 static dev_t find_rootfs(void)
 {
 	dev_t dev = 0;
+#if 0
 	int i, num_dev, partid;
 	struct partition *plist, *p;
 	struct superblock *sb = malloc(BLKSZ);
@@ -101,5 +103,6 @@ static dev_t find_rootfs(void)
 	}
 
 	free(sb);
+#endif
 	return dev;
 }

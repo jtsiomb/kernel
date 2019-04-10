@@ -37,9 +37,9 @@ get_instr_ptr:
 	/* get_caller_instr_ptr(void)
 	 * returns the address of the next instruction after the call to the function that
 	 * called this function.
-     * NOTE: will only work properly when called from a function that uses ebp to point
-     * to its stack frame, which means all of the C functions but pretty much none of
-     * our assembly functions.
+	 * NOTE: will only work properly when called from a function that uses ebp to point
+	 * to its stack frame, which means all of the C functions but pretty much none of
+	 * our assembly functions.
 	 */
 	.globl get_caller_instr_ptr
 get_caller_instr_ptr:
